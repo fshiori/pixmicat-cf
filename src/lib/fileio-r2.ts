@@ -88,48 +88,113 @@ export class FileIOR2 implements FileIO {
   }
 
   async validateImage(file: File): Promise<boolean> {
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
-      return false;
+    // 基礎圖片類型（支援顯示）
+    const allowedTypes = [
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'image/bmp',
+      'image/x-windows-bmp'
+    ];
+
+    // SWF Flash 檔案（不支援顯示尺寸，只允許上傳）
+    const swfTypes = ['application/x-shockwave-flash'];
+
+    const ext = file.name.split('.').pop()?.toLowerCase();
+
+    if (allowedTypes.includes(file.type)) {
+      try {
+        await this.getImageDimensions(await file.arrayBuffer());
+        return true;
+      } catch {
+        return false;
+      }
     }
 
-    try {
-      await this.getImageDimensions(await file.arrayBuffer());
-      return true;
-    } catch {
-      return false;
+    // SWF 檢查
+    if (swfTypes.includes(file.type) || ext === 'swf') {
+      return this.validateSWF(await file.arrayBuffer());
     }
+
+    return false;
+  }
+
+  // 驗證 SWF 檔案格式
+  private validateSWF(buffer: ArrayBuffer): boolean {
+    if (buffer.byteLength < 3) return false;
+
+    const view = new DataView(buffer);
+    // SWF 檔頭檢查：FWS（未壓縮）或 CWS（壓縮）或 ZWS（LZMA 壓縮）
+    const signature = String.fromCharCode(
+      view.getUint8(0),
+      view.getUint8(1),
+      view.getUint8(2)
+    );
+
+    return ['FWS', 'CWS', 'ZWS'].includes(signature);
   }
 
   async resizeImage(
     image: ArrayBuffer,
     maxWidth: number,
     maxHeight: number,
-    quality: number = 0.85
+    quality: number = 0.75
   ): Promise<Blob> {
-    // 在 Cloudflare Workers 中，我們使用簡化策略：
-    // 如果圖片已經小於指定尺寸，直接返回原始圖片
-    // 否則返回原始圖片（由客戶端或 CDN 處理縮放）
-    
     const dimensions = await this.getImageDimensions(image);
-    
-    // 如果圖片已經小於目標尺寸，不需要縮圖
+
+    // 如果圖片已經小於目標尺寸，直接返回
     if (dimensions.width <= maxWidth && dimensions.height <= maxHeight) {
       return new Blob([image], { type: 'image/jpeg' });
     }
-    
-    // TODO: 實現真正的縮圖生成
-    // 選項：
-    // 1. 使用 Cloudflare Images API（需要付費）
-    // 2. 使用外部服務（如 Cloudinary, imgix）
-    // 3. 在客戶端生成縮圖後上傳
-    
-    // 目前策略：返回原始圖片，由瀏覽器 CSS 處理顯示尺寸
-    return new Blob([image], { type: 'image/jpeg' });
+
+    try {
+      // 使用 Cloudflare Image Resizing
+      // 先將圖片存為臨時文件
+      const tempKey = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const tempBlob = new Blob([image]);
+
+      // 暫時存儲到 R2
+      await this.r2.put(tempKey, tempBlob);
+
+      // 構建 CF Images Resizing URL
+      // 格式: /cdn-cgi/image/{options}/{source}
+      const resizeOptions = `width=${maxWidth},height=${maxHeight},quality=${Math.round(quality * 100)},format=jpeg,fit=inside`;
+
+      // 使用 Cloudflare Workers Image Resizing API
+      const imageUrl = `http://localhost:8787/${tempKey}`;
+
+      const response = await fetch(imageUrl, {
+        cf: {
+          image: {
+            width: maxWidth,
+            height: maxHeight,
+            quality: Math.round(quality * 100),
+            format: 'jpeg',
+            fit: 'inside'
+          }
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Image resize failed: ${response.status}`);
+      }
+
+      const resizedImage = await response.blob();
+
+      // 清理臨時文件
+      await this.r2.delete(tempKey);
+
+      return resizedImage;
+    } catch (error) {
+      console.error('Cloudflare Image Resizing failed, falling back to original:', error);
+
+      // Fallback: 返回原始圖片
+      return new Blob([image], { type: 'image/jpeg' });
+    }
   }
 
   async getImageDimensions(image: ArrayBuffer): Promise<{ width: number; height: number }> {
-    // 簡化版：從 JPEG/PNG header 讀取尺寸
     const view = new DataView(image);
 
     // JPEG
@@ -158,6 +223,16 @@ export class FileIOR2 implements FileIO {
     if (view.getUint16(0) === 0x4749) {
       const width = view.getUint16(6);
       const height = view.getUint16(8);
+      return { width, height };
+    }
+
+    // BMP
+    if (view.getUint16(0) === 0x4D42) { // 'BM'
+      // BMP 檔頭結構
+      // offset 18-21: width
+      // offset 22-25: height
+      const width = view.getUint32(18, true); // little-endian
+      const height = view.getUint32(22, true);
       return { width, height };
     }
 

@@ -104,7 +104,7 @@ export interface PIO {
   /**
    * 取得討論串完整內容
    */
-  getThread(threadNo: number, maxReplies?: number): Promise<Thread | null>;
+  getThread(threadNo: number, maxReplies?: number, page?: number, perPage?: number): Promise<Thread | null>;
 
   /**
    * 搜尋文章

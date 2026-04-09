@@ -21,8 +21,8 @@ Pixmicat! 圖版系統的 Cloudflare Workers TypeScript 移植版本。
 - ✅ 自動連結 URL
 - ✅ 引用系統 (>>No.)
 - ✅ 37 個可調整設定
-- 🚧 RSS 輸出（規劃中）
-- 🚧 API 文件（規劃中）
+- ✅ RSS 輸出
+- ✅ API 文件
 
 ## 技術架構
 
@@ -201,10 +201,10 @@ GET /api/search?q=關鍵字&type=all&page=1
 - [x] 管理員後台
 - [x] 設定系統（37 個設定項目）
 - [x] Spam 防護機制
-- [ ] RSS 輸出
-- [ ] API 文件
+- [x] RSS 輸出
+- [x] API 文件
 - [ ] 單元測試
-- [ ] 分頁功能（首頁）
+- [x] 分頁功能（首頁）
 
 ## 貢獻
 
