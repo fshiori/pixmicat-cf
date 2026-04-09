@@ -330,7 +330,7 @@ export class PIOD1 implements PIO {
     return files;
   }
 
-  async getThread(threadNo: number, maxReplies: number = 0): Promise<Thread | null> {
+  async getThread(threadNo: number, maxReplies: number = 0, page: number = 1, perPage: number = 0): Promise<Thread | null> {
     // 先取得 OP
     const opPosts = await this.fetchPosts(threadNo);
     if (opPosts.length === 0) {
@@ -341,9 +341,21 @@ export class PIOD1 implements PIO {
     const replyNos = await this.fetchPostList(threadNo);
     const allReplies = await this.fetchPosts(replyNos);
 
-    // 如果指定了 maxReplies，只顯示最後的幾個回應（RE_DEF 設定）
+    // 處理分頁邏輯
     let replies = allReplies;
-    if (maxReplies > 0 && allReplies.length > maxReplies) {
+    let totalReplyPages = 1;
+    let currentReplyPage = 1;
+
+    if (perPage > 0) {
+      // RE_PAGE_DEF 模式：啟用分頁
+      totalReplyPages = Math.ceil(allReplies.length / perPage) || 1;
+      currentReplyPage = Math.min(page, totalReplyPages);
+
+      const startIndex = (currentReplyPage - 1) * perPage;
+      const endIndex = startIndex + perPage;
+      replies = allReplies.slice(startIndex, endIndex);
+    } else if (maxReplies > 0 && allReplies.length > maxReplies) {
+      // RE_DEF 模式：只顯示最後幾個回應
       replies = allReplies.slice(-maxReplies);
     }
 
@@ -360,11 +372,18 @@ export class PIOD1 implements PIO {
       no: threadNo,
       resto: op.resto,
       posts,
-      reply_count: allReplies.length, // 總回應數（不受 maxReplies 影響）
+      reply_count: allReplies.length, // 總回應數（不受 maxReplies/perPage 影響）
       image_count: posts.filter(p => p.tim && p.ext).length,
       last_reply_time: lastReplyTime,
       sticky: op.sticky || 0,
       locked: op.locked || 0,
+      // 分頁資訊
+      pagination: perPage > 0 ? {
+        current_page: currentReplyPage,
+        total_pages: totalReplyPages,
+        per_page: perPage,
+        total_items: allReplies.length,
+      } : undefined,
     };
   }
 

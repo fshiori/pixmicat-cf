@@ -7,6 +7,8 @@ import { Router } from 'itty-router';
 import { PIOD1 } from './lib/pio-d1';
 import { FileIOR2 } from './lib/fileio-r2';
 import { AdminSystem } from './lib/admin';
+import { AntiSpamSystem } from './lib/anti-spam';
+import { getHoneypotNames, validateHoneypot, getDefaultFieldTrapNames } from './lib/field-trap';
 
 // 建立路由器
 const router = Router();
@@ -114,12 +116,14 @@ router.post('/api/post', async (request, env: Env) => {
       );
     }
 
-    // 取得真正的欄位
+    // 取得真正的欄位（使用 Field Trap 隨機名稱）
+    const fieldTrapNames = getDefaultFieldTrapNames();
+    
     const resto = parseInt(formData.get('resto')?.toString() || '0');
-    let name = formData.get('ft_name')?.toString() || '無名氏';
-    const email = formData.get('ft_email')?.toString() || '';
-    let sub = formData.get('ft_sub')?.toString() || '';
-    let com = formData.get('ft_com')?.toString() || '';
+    let name = formData.get(fieldTrapNames.name)?.toString() || '無名氏';
+    const email = formData.get(fieldTrapNames.email)?.toString() || '';
+    let sub = formData.get(fieldTrapNames.subject)?.toString() || '';
+    let com = formData.get(fieldTrapNames.comment)?.toString() || '';
     const password = formData.get('password')?.toString() || '';
     const category = formData.get('category')?.toString() || '';
     const file = formData.get('file') as File | null;
@@ -254,6 +258,7 @@ router.post('/api/post', async (request, env: Env) => {
 
     // 處理圖片上傳
     let imageData;
+    let fileMD5: string | undefined;
     if (file && file.size > 0) {
       const valid = await fileio.validateImage(file);
       if (!valid) {
@@ -292,6 +297,7 @@ router.post('/api/post', async (request, env: Env) => {
       const enableDuplicateCheck = await getConfigValue(env, 'enable_duplicate_check', '1') === '1';
       if (enableDuplicateCheck) {
         const md5Hash = await fileio.calculateMD5(fileUint8Array);
+        fileMD5 = md5Hash;
         const existingPost = await pio.getPostByMD5(md5Hash);
 
         if (existingPost) {
@@ -315,7 +321,32 @@ router.post('/api/post', async (request, env: Env) => {
         }
       }
 
-      // 重新創建 File 物件用於後續處理
+    // 反垃圾訊息檢查（在檔案處理後以取得 MD5）
+    const antiSpam = new AntiSpamSystem(env);
+    const antiSpamResult = await antiSpam.checkSpam(
+      name,
+      email,
+      sub,
+      com,
+      fileMD5,
+      request
+    );
+
+    if (antiSpamResult.isSpam) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `發文失敗：${antiSpamResult.reason}`,
+          details: antiSpamResult.details
+        }),
+        {
+          status: 403,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        }
+      );
+    }
+
+    // 重新創建 File 物件用於後續處理
       const reusedFile = new File([fileBuffer], file.name, { type: file.type });
 
       const now = Date.now();
@@ -345,6 +376,24 @@ router.post('/api/post', async (request, env: Env) => {
         const thread = await pio.getThread(resto, 0);
         if (thread && thread.reply_count >= maxRes) {
           isSage = true;
+        }
+      }
+    }
+
+    // 檢查討論串年齡（MAX_AGE_TIME 設定：超過此時間自動 sage）
+    if (resto > 0 && !isSage) {
+      const maxAgeTime = parseInt(await getConfigValue(env, 'max_age_time', '0'));
+      if (maxAgeTime > 0) {
+        // 取得 OP 文章時間
+        const opPost = await pio.fetchPosts(resto);
+        if (opPost.length > 0) {
+          const opTime = opPost[0].time;
+          const currentTime = Math.floor(Date.now() / 1000);
+          const ageHours = (currentTime - opTime) / 3600;
+
+          if (ageHours > maxAgeTime) {
+            isSage = true;
+          }
         }
       }
     }
@@ -783,7 +832,20 @@ router.get('/res/:no.htm', async (request, env: Env) => {
   await pio.prepare();
 
   const no = parseInt(request.params.no.replace('.htm', '') || '0');
-  const thread = await pio.getThread(no);
+  const url = new URL(request.url);
+  
+  // 取得分頁參數
+  const page = parseInt(url.searchParams.get('page') || '1');
+  const rePageDef = parseInt(await getConfigValue(env, 're_page_def', '0')); // 0 = 不分頁
+  const reDef = parseInt(await getConfigValue(env, 're_def', '5')); // 首頁顯示回應數
+
+  // 如果 rePageDef > 0，啟用分頁；否則使用 reDef 限制回應數
+  const thread = await pio.getThread(
+    no,
+    rePageDef > 0 ? 0 : reDef, // maxReplies (分頁模式時為 0)
+    page,
+    rePageDef // perPage
+  );
 
   if (!thread) {
     const html = `<!DOCTYPE html>
@@ -802,6 +864,10 @@ router.get('/res/:no.htm', async (request, env: Env) => {
 
   const title = await getConfigValue(env, 'title', 'Pixmicat!-CF');
   const defaultName = await getConfigValue(env, 'default_name', '無名氏');
+
+  // 取得欄位陷阱名稱
+  const fieldTrapNames = getDefaultFieldTrapNames();
+  const honeypotNames = getHoneypotNames();
 
   const html = `<!DOCTYPE html>
 <html lang="${env.DEFAULT_LANGUAGE || 'zh-TW'}">
@@ -880,28 +946,28 @@ router.get('/res/:no.htm', async (request, env: Env) => {
         <form id="replyForm" enctype="multipart/form-data">
           <input type="hidden" name="resto" value="${post.no}">
           <!-- Honeypot 欄位：防止 spam bot -->
-          <input type="text" name="hp_name" value="spammer" class="hp-hide" tabindex="-1" autocomplete="off">
-          <input type="text" name="hp_email" value="foo@foo.bar" class="hp-hide" tabindex="-1" autocomplete="off">
-          <input type="text" name="hp_sub" value="DO NOT FIX THIS" class="hp-hide" tabindex="-1" autocomplete="off">
-          <textarea name="hp_com" class="hp-hide" tabindex="-1" autocomplete="off">EID OG SMAPS</textarea>
-          <input type="checkbox" name="hp_reply" value="yes" class="hp-hide" tabindex="-1">
-          <!-- 真正的欄位 -->
+          <input type="text" name="${honeypotNames.name}" value="spammer" class="hp-hide" tabindex="-1" autocomplete="off">
+          <input type="text" name="${honeypotNames.email}" value="foo@foo.bar" class="hp-hide" tabindex="-1" autocomplete="off">
+          <input type="text" name="${honeypotNames.subject}" value="DO NOT FIX THIS" class="hp-hide" tabindex="-1" autocomplete="off">
+          <textarea name="${honeypotNames.comment}" class="hp-hide" tabindex="-1" autocomplete="off">EID OG SMAPS</textarea>
+          <input type="checkbox" name="${honeypotNames.reply}" value="yes" class="hp-hide" tabindex="-1">
+          <!-- 真正的欄位（使用隨機名稱） -->
           <table>
             <tr>
               <td><label>名稱</label></td>
-              <td><input type="text" name="ft_name" id="name" value="${defaultName}"></td>
+              <td><input type="text" name="${fieldTrapNames.name}" id="name" value="${defaultName}"></td>
             </tr>
             <tr>
               <td><label>E-mail</label></td>
-              <td><input type="text" name="ft_email" id="email"></td>
+              <td><input type="text" name="${fieldTrapNames.email}" id="email"></td>
             </tr>
             <tr>
               <td><label>標題</label></td>
-              <td><input type="text" name="ft_sub" id="sub"></td>
+              <td><input type="text" name="${fieldTrapNames.subject}" id="sub"></td>
             </tr>
             <tr>
               <td><label>內容</label></td>
-              <td><textarea name="ft_com" id="com" rows="4"></textarea></td>
+              <td><textarea name="${fieldTrapNames.comment}" id="com" rows="4"></textarea></td>
             </tr>
             <tr>
               <td><label>檔案</label></td>
@@ -921,6 +987,43 @@ router.get('/res/:no.htm', async (request, env: Env) => {
         </form>
       </div><hr>` : ''}
     `).join('')}
+
+    ${thread.pagination ? `
+      <div class="pagination" style="text-align: center; margin: 20px 0; padding: 10px; background: #f0e0d6; border: 1px solid #d9bfb7;">
+        ${(thread.pagination.current_page || 1) > 1 ? `
+          <a href="/res/${no}.htm?page=${(thread.pagination.current_page || 1) - 1}" style="margin: 0 5px;">&lt; 上一頁</a>
+        ` : ''}
+        
+        ${Array.from({ length: Math.min(thread.pagination?.total_pages || 10, 10) }, (_, i) => {
+          let pageNum;
+          const totalPages = thread.pagination?.total_pages || 1;
+          const currentPage = thread.pagination?.current_page || 1;
+          
+          if (totalPages <= 10) {
+            pageNum = i + 1;
+          } else {
+            // 顯示當前頁附近的頁碼
+            const start = Math.max(1, currentPage - 4);
+            const end = Math.min(totalPages, start + 9);
+            pageNum = start + i;
+            if (pageNum > end) return '';
+          }
+          
+          const isActive = pageNum === currentPage;
+          return isActive 
+            ? `<strong style="margin: 0 5px;">[${pageNum}]</strong>`
+            : `<a href="/res/${no}.htm?page=${pageNum}" style="margin: 0 5px;">${pageNum}</a>`;
+        }).join('')}
+        
+        ${(thread.pagination?.current_page || 1) < (thread.pagination?.total_pages || 1) ? `
+          <a href="/res/${no}.htm?page=${(thread.pagination?.current_page || 1) + 1}" style="margin: 0 5px;">下一頁 &gt;</a>
+        ` : ''}
+        
+        <span style="margin-left: 10px; color: #800000;">
+          共 ${thread.pagination?.total_items || 0} 則回應，${thread.pagination?.total_pages || 1} 頁
+        </span>
+      </div>
+    ` : ''}
 
     <div style="text-align: center; margin-top: 20px;">
       <a href="/">返回首頁</a>
@@ -3121,6 +3224,10 @@ async function getHomePage(env: Env, page: number = 1, request?: Request): Promi
   const adminSystem = new AdminSystem(env);
   const isAdmin = request ? await adminSystem.isAdminRequest(request) : false;
 
+  // 取得欄位陷阱名稱
+  const fieldTrapNames = getDefaultFieldTrapNames();
+  const honeypotNames = getHoneypotNames();
+
   return `<!DOCTYPE html>
 <html lang="${env.DEFAULT_LANGUAGE || 'zh-TW'}">
 <head>
@@ -3163,24 +3270,24 @@ async function getHomePage(env: Env, page: number = 1, request?: Request): Promi
       <form id="postForm" action="/api/post" method="POST" enctype="multipart/form-data">
         <input type="hidden" name="resto" id="resto" value="">
         <!-- Honeypot 欄位：防止 spam bot -->
-        <input type="text" name="hp_name" value="spammer" class="hp-hide" tabindex="-1" autocomplete="off">
-        <input type="text" name="hp_email" value="foo@foo.bar" class="hp-hide" tabindex="-1" autocomplete="off">
-        <input type="text" name="hp_sub" value="DO NOT FIX THIS" class="hp-hide" tabindex="-1" autocomplete="off">
-        <textarea name="hp_com" class="hp-hide" tabindex="-1" autocomplete="off">EID OG SMAPS</textarea>
-        <input type="checkbox" name="hp_reply" value="yes" class="hp-hide" tabindex="-1">
-        <!-- 真正的欄位 -->
+        <input type="text" name="${honeypotNames.name}" value="spammer" class="hp-hide" tabindex="-1" autocomplete="off">
+        <input type="text" name="${honeypotNames.email}" value="foo@foo.bar" class="hp-hide" tabindex="-1" autocomplete="off">
+        <input type="text" name="${honeypotNames.subject}" value="DO NOT FIX THIS" class="hp-hide" tabindex="-1" autocomplete="off">
+        <textarea name="${honeypotNames.comment}" class="hp-hide" tabindex="-1" autocomplete="off">EID OG SMAPS</textarea>
+        <input type="checkbox" name="${honeypotNames.reply}" value="yes" class="hp-hide" tabindex="-1">
+        <!-- 真正的欄位（使用隨機名稱） -->
         <table>
           <tr>
             <td><label>名稱</label></td>
-            <td><input type="text" name="ft_name" id="name" value="${defaultName}"></td>
+            <td><input type="text" name="${fieldTrapNames.name}" id="name" value="${defaultName}"></td>
           </tr>
           <tr>
             <td><label>E-mail</label></td>
-            <td><input type="text" name="ft_email" id="email"></td>
+            <td><input type="text" name="${fieldTrapNames.email}" id="email"></td>
           </tr>
           <tr>
             <td><label>標題</label></td>
-            <td><input type="text" name="ft_sub" id="sub"></td>
+            <td><input type="text" name="${fieldTrapNames.subject}" id="sub"></td>
           </tr>
           <tr>
             <td><label>附檔</label></td>
@@ -3193,7 +3300,7 @@ async function getHomePage(env: Env, page: number = 1, request?: Request): Promi
           </tr>
           <tr>
             <td><label>內文</label></td>
-            <td><textarea name="ft_com" id="com"></textarea></td>
+            <td><textarea name="${fieldTrapNames.comment}" id="com"></textarea></td>
           </tr>
           <tr>
             <td><label>刪除用密碼</label></td>
