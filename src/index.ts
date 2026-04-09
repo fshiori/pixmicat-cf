@@ -733,21 +733,36 @@ router.get('/img/:filename', async (request, env: Env) => {
 });
 
 // 縮圖代理路由
+// 使用 Cloudflare Image Resizing API
+// 格式: /cdn-cgi/image/width=250,height=250,quality=75,format=auto/img/tim.ext
 router.get('/thumb/:filename', async (request, env: Env) => {
-  const object = await env.STORAGE.get(request.params.filename);
+  // 提取 tim（去掉 's' 後綴）
+  const filename = request.params.filename;
+  const tim = filename.replace(/s\.jpg$/, '');
+
+  // 嘗試從 R2 取得原始圖片
+  const originalKey = tim + '.png'; // 或其他副檔名
+  let object = await env.STORAGE.get(originalKey);
+
+  // 如果 PNG 不存在，嘗試其他副檔名
+  if (!object) {
+    const extensions = ['.jpg', '.jpeg', '.gif', '.webp'];
+    for (const ext of extensions) {
+      object = await env.STORAGE.get(tim + ext);
+      if (object) break;
+    }
+  }
 
   if (!object) {
     return new Response('Not found', { status: 404 });
   }
 
-  const headers = new Headers();
-  headers.set('Content-Type', object.httpMetadata?.contentType || 'image/jpeg');
-  headers.set('Content-Length', object.size.toString());
-  headers.set('etag', object.httpEtag);
-  headers.set('Cache-Control', 'public, max-age=31536000');
+  // 構建 Cloudflare Image Resizing URL
+  const url = new URL(request.url);
+  const cfImageUrl = `${url.protocol}//${url.host}/cdn-cgi/image/width=250,height=250,quality=75,format=auto,fit=cover/img/${tim}.jpg`;
 
-  const data = await object.arrayBuffer();
-  return new Response(data, { headers });
+  // 返回 307 重定向到 Cloudflare Image Resizing URL
+  return Response.redirect(cfImageUrl, 307);
 });
 
 // 單一討論串頁面
