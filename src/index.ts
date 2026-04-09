@@ -733,36 +733,48 @@ router.get('/img/:filename', async (request, env: Env) => {
 });
 
 // 縮圖代理路由
-// 使用 Cloudflare Image Resizing API
-// 格式: /cdn-cgi/image/width=250,height=250,quality=75,format=auto/img/tim.ext
+// 生產環境：使用 Cloudflare Image Resizing API
+// 本地開發：直接從 R2 返回原始圖片
 router.get('/thumb/:filename', async (request, env: Env) => {
   // 提取 tim（去掉 's' 後綴）
   const filename = request.params.filename;
   const tim = filename.replace(/s\.jpg$/, '');
 
   // 嘗試從 R2 取得原始圖片
-  const originalKey = tim + '.png'; // 或其他副檔名
-  let object = await env.STORAGE.get(originalKey);
-
-  // 如果 PNG 不存在，嘗試其他副檔名
-  if (!object) {
-    const extensions = ['.jpg', '.jpeg', '.gif', '.webp'];
-    for (const ext of extensions) {
-      object = await env.STORAGE.get(tim + ext);
-      if (object) break;
-    }
+  let object: R2Object | null = null;
+  const extensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
+  
+  for (const ext of extensions) {
+    object = await env.STORAGE.get(tim + ext);
+    if (object) break;
   }
 
   if (!object) {
     return new Response('Not found', { status: 404 });
   }
 
-  // 構建 Cloudflare Image Resizing URL
-  const url = new URL(request.url);
-  const cfImageUrl = `${url.protocol}//${url.host}/cdn-cgi/image/width=250,height=250,quality=75,format=auto,fit=cover/img/${tim}.jpg`;
+  // 檢查是否為本地開發環境
+  const isLocalDev = request.url.includes('localhost') || request.url.includes('127.0.0.1');
 
-  // 返回 307 重定向到 Cloudflare Image Resizing URL
-  return Response.redirect(cfImageUrl, 307);
+  if (!isLocalDev) {
+    // 生產環境：使用 Cloudflare Image Resizing
+    const url = new URL(request.url);
+    const originalExt = object.key?.split('.').pop() || 'jpg';
+    const cfImageUrl = `${url.protocol}//${url.host}/cdn-cgi/image/width=250,height=250,quality=75,format=auto,fit=cover/img/${tim}.${originalExt}`;
+    
+    // 返回 307 重定向到 Cloudflare Image Resizing URL
+    return Response.redirect(cfImageUrl, 307);
+  }
+
+  // 本地開發環境：直接返回原始圖片
+  const headers = new Headers();
+  headers.set('Content-Type', object.httpMetadata?.contentType || 'image/jpeg');
+  headers.set('Content-Length', object.size.toString());
+  headers.set('etag', object.httpEtag || '');
+  headers.set('Cache-Control', 'public, max-age=31536000');
+
+  const data = await object.arrayBuffer();
+  return new Response(data, { headers });
 });
 
 // 單一討論串頁面
