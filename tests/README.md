@@ -1,177 +1,288 @@
 # 測試指南
 
-## 測試框架
-
-本專案使用 **Vitest** 作為測試框架，搭配 **happy-dom** 模擬瀏覽器環境。
-
-## 安裝依賴
-
-```bash
-npm install
-```
-
-## 執行測試
-
-### 執行所有測試（監聽模式）
-
-```bash
-npm test
-```
-
-### 執行所有測試（單次）
-
-```bash
-npm run test:run
-```
-
-### 執行測試並生成覆蓋率報告
-
-```bash
-npm run test:coverage
-```
-
-覆蓋率報告會生成在 `coverage/` 目錄中。
+本專案使用 **Vitest** 進行單元測試和 E2E 測試。
 
 ## 測試結構
 
 ```
 tests/
-├── setup.ts           # 測試環境設定
-├── types.ts           # 測試類型定義
-├── utils.ts           # 測試工具函數
-├── pio-d1.test.ts     # PIO D1 測試
-├── fileio-r2.test.ts  # FileIO R2 測試
-├── utils.test.ts      # 工具函數測試
-├── api.test.ts        # API 路由測試
-└── integration.test.ts # 整合測試
+├── setup.ts                    # 測試環境設定
+├── types.ts                    # 測試類型定義
+├── utils.ts                    # 測試輔助函數
+├── anti-spam.test.ts          # AntiSpamSystem 單元測試
+├── admin.test.ts              # AdminSystem 單元測試
+├── field-trap.test.ts         # FieldTrap 單元測試
+├── pio-d1.test.ts             # PIOD1 單元測試
+├── fileio-r2.test.ts          # FileIOR2 單元測試
+├── utils.test.ts              # 工具函數單元測試
+├── api.test.ts                # API 測試
+├── integration.test.ts        # 整合測試
+├── e2e-post.test.ts           # E2E 測試 - 發文流程
+└── e2e-admin.test.ts          # E2E 測試 - 管理功能
 ```
 
-## 測試覆蓋範圍
+## 安裝依賴
 
-### ✅ 已測試功能
+```bash
+npm install --save-dev vitest happy-dom
+```
 
-- **PIOD1**
-  - 準備資料庫
-  - 取得文章
-  - 取得討論串
-  - 創建文章
-  - 刪除文章
-  - 取得討論串列表
+## 運行測試
 
-- **FileIOR2**
-  - 初始化
-  - 取得圖片
-  - 刪除圖片
-  - 驗證圖片格式
-  - 讀取圖片尺寸
-  - 計算 MD5 雜湊
+### 運行所有測試
 
-- **工具函數**
-  - HTML 轉義
-  - 自動連結 URL
-  - 引用系統
-  - 格式化檔案大小
-  - 格式化日期
-  - 生成 Tripcode
-  - Sage 檢測
+```bash
+npm test
+```
 
-- **API 路由**
-  - 取得討論串列表
-  - 創建文章
-  - 刪除文章
-  - 搜尋文章
-  - RSS 輸出
-  - 圖片路由
-  - 管理員路由
+### 運行特定測試文件
 
-- **整合測試**
-  - 完整發文流程
-  - 完整上傳圖片流程
-  - 完整搜尋流程
-  - 完整管理流程
-  - 完整 RSS 流程
-  - Spam 防護
-  - 分類瀏覽
-  - 分頁功能
+```bash
+npm test -- tests/anti-spam.test.ts
+```
 
-## 撰寫新測試
+### 運行特定測試套件
 
-### 1. 單元測試範例
+```bash
+npm test -- -t "AntiSpamSystem"
+```
+
+### 監看模式
+
+```bash
+npm test -- --watch
+```
+
+### 生成覆蓋率報告
+
+```bash
+npm test -- --coverage
+```
+
+覆蓋率報告會生成在 `coverage/` 目錄：
+- `coverage/index.html` - HTML 報告
+- `coverage/coverage-final.json` - JSON 報告
+
+## 測試類型
+
+### 1. 單元測試
+
+測試個別函數和類別的功能：
+
+- **anti-spam.test.ts** - 反垃圾系統
+  - 配置管理
+  - 限制文字檢查
+  - 檔案 MD5 檢查
+  - IP 模式封鎖
+  - DNSBL 檢查
+
+- **admin.test.ts** - 管理系統
+  - 密碼驗證
+  - Session 管理
+  - Cap 驗證
+  - IP 封鎖
+
+- **field-trap.test.ts** - Field Trap
+  - 隨機欄位名稱生成
+  - Honeypot 驗證
+  - Bot 檢測
+
+### 2. E2E 測試
+
+測試完整的使用者流程：
+
+- **e2e-post.test.ts** - 發文流程
+  - 創建新討論串
+  - 回應討論串
+  - Tripcode 生成
+  - 內文處理
+  - 檔案上傳
+  - 錯誤處理
+
+- **e2e-admin.test.ts** - 管理功能
+  - 管理員登入
+  - Session 驗證
+  - IP 封鎖管理
+  - 反垃圾設定
+  - 文章管理
+  - 配置管理
+
+## 測試原則
+
+### 1. 隔離性
+
+每個測試應該獨立運行，不依賴其他測試：
 
 ```typescript
-import { describe, it, expect } from 'vitest';
-
-describe('MyFunction', () => {
-  it('should do something', () => {
-    const result = myFunction('input');
-    expect(result).toBe('expected output');
-  });
+beforeEach(() => {
+  // 重置模擬環境
+  mockEnv = createMockEnv();
 });
 ```
 
-### 2. 整合測試範例
+### 2. 可重複性
+
+測試應該每次運行都得到相同結果：
 
 ```typescript
-import { describe, it, expect, beforeEach } from 'vitest';
-import { createMockEnv } from './utils';
+it('應該返回一致的結果', () => {
+  const result1 = generateFieldTrapNames();
+  const result2 = generateFieldTrapNames();
 
-describe('Integration Test', () => {
-  let mockEnv: any;
-
-  beforeEach(() => {
-    mockEnv = createMockEnv();
-  });
-
-  it('should complete a workflow', async () => {
-    // 測試完整流程
-  });
+  expect(result1.name).not.toBe(result2.name); // 隨機性
 });
 ```
 
-## 測試目標
+### 3. 清晰的命名
 
-- **單元測試覆蓋率**: 目標 > 80%
-- **整合測試**: 覆蓋主要使用者流程
-- **效能測試**: 確保關鍵操作 < 100ms
+測試名稱應該清楚描述測試的行為：
 
-## 持續整合
+```typescript
+it('應該檢測 spam 關鍵字', () => { });
+it('應該拒絕填充 honeypot 的 bot', () => { });
+```
 
-測試會在 CI/CD 流程中自動執行：
+### 4. 測試覆蓋
+
+每個功能都應該有：
+- ✅ 正常情況測試
+- ✅ 錯誤情況測試
+- ✅ 邊界情況測試
+
+## Mock 策略
+
+### Cloudflare Workers API
+
+使用 `vi.fn()` 模擬：
+
+```typescript
+mockEnv = {
+  DB: {
+    prepare: vi.fn(() => ({
+      bind: vi.fn(() => ({
+        first: vi.fn(() => Promise.resolve(mockData)),
+        run: vi.fn(() => Promise.resolve({ meta: {} })),
+      })),
+    })),
+  },
+  KV: {
+    get: vi.fn(() => Promise.resolve('value')),
+    put: vi.fn(),
+  },
+};
+```
+
+### Request/Response
+
+使用標準 Web API：
+
+```typescript
+const mockRequest = {
+  headers: {
+    get: vi.fn((header) => {
+      if (header === 'CF-Connecting-IP') return '192.168.1.1';
+      return null;
+    }),
+  },
+} as any;
+```
+
+## CI/CD 整合
+
+### GitHub Actions
 
 ```yaml
-# .github/workflows/test.yml
 - name: Run tests
-  run: npm run test:run
+  run: npm test
+
+- name: Generate coverage
+  run: npm test -- --coverage
+
+- name: Upload coverage
+  uses: codecov/codecov-action@v3
+  with:
+    file: ./coverage/coverage-final.json
 ```
+
+## 調試測試
+
+### 使用 console.log
+
+```typescript
+it('調試測試', () => {
+  const result = someFunction();
+  console.log('Result:', result); // 會顯示在測試輸出中
+  expect(result).toBe(true);
+});
+```
+
+### 只運行一個測試
+
+```typescript
+it.only('只運行這個測試', () => {
+  // ...
+});
+```
+
+### 跳過測試
+
+```typescript
+it.skip('暫時跳過這個測試', () => {
+  // ...
+});
+```
+
+## 測試覆蓋率目標
+
+- **語句覆蓋率**: > 80%
+- **分支覆蓋率**: > 75%
+- **函數覆蓋率**: > 80%
+- **行覆蓋率**: > 80%
 
 ## 常見問題
 
-### Q: 測試失敗怎麼辦？
+### Q: 測試失敗並顯示 "Cannot find module"
 
-A: 檢查測試日誌，確認是哪個測試失敗。如果是環境問題，嘗試重新安裝依賴：
+**A:** 確保已安裝所有依賴：
 
 ```bash
-rm -rf node_modules package-lock.json
 npm install
 ```
 
-### Q: 如何模擬 Cloudflare Workers 環境？
+### Q: 模擬的函數沒有被調用
 
-A: 使用 `tests/setup.ts` 中定義的模擬環境，或使用 `createMockEnv()` 工具函數。
-
-### Q: 如何測試非同步函數？
-
-A: 使用 `async/await`：
+**A:** 確保正確設置 mock：
 
 ```typescript
-it('should handle async', async () => {
-  const result = await asyncFunction();
-  expect(result).toBeDefined();
+(mockEnv.DB.prepare as any).mockReturnValue({
+  bind: vi.fn(() => ({ /* ... */ })),
 });
 ```
 
-## 資源
+### Q: 測試超時
 
-- [Vitest 文件](https://vitest.dev/)
-- [Cloudflare Workers 測試指南](https://developers.cloudflare.com/workers/testing/)
-- [happy-dom 文件](https://github.com/capricorn86/happy-dom)
+**A:** 增加測試超時時間：
+
+```typescript
+it('慢速測試', { timeout: 10000 }, async () => {
+  // ...
+});
+```
+
+## 貢獻測試
+
+添加新功能時，請同時添加：
+
+1. **單元測試** - 測試個別函數
+2. **E2E 測試** - 測試完整流程
+3. **邊界情況** - 測試錯誤處理
+
+範例：
+
+```typescript
+describe('新功能', () => {
+  it('應該正常工作', () => { });
+  it('應該處理錯誤', () => { });
+  it('應該處理邊界情況', () => { });
+});
+```
