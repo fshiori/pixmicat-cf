@@ -140,9 +140,34 @@ router.post('/api/post', async (request, env: Env) => {
       name = `${baseName}◆${tripcode}`;
     }
 
+    // 檢查是否清除 E-mail 中的 sage（CLEAR_SAGE）
+    const clearSage = await getConfigValue(env, 'clear_sage', '0') === '1';
+    if (clearSage && email.toLowerCase() === 'sage') {
+      email = '';
+    }
+
+    // 檢查是否允許匿名（ALLOW_NONAME）
+    const allowNoname = await getConfigValue(env, 'allow_noname', '1') === '1';
+    if (!allowNoname && (!name || name.trim() === '')) {
+      return new Response(
+        JSON.stringify({ success: false, error: '必須輸入名稱' }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        }
+      );
+    }
+
+    // 如果名稱為空，使用預設名稱
+    if (!name || name.trim() === '') {
+      const defaultName = await getConfigValue(env, 'default_name', '無名氏');
+      name = defaultName;
+    }
+
     // 字數限制檢查
     const maxCommentLength = parseInt(await getConfigValue(env, 'max_comment_length', '2000'));
     const maxFieldLength = parseInt(await getConfigValue(env, 'max_field_length', '100'));
+    const maxLineBreaks = parseInt(await getConfigValue(env, 'max_line_breaks', '50'));
 
     if (com.length > maxCommentLength) {
       return new Response(
@@ -152,6 +177,20 @@ router.post('/api/post', async (request, env: Env) => {
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
         }
       );
+    }
+
+    // 檢查換行數量（BR_CHECK）
+    if (maxLineBreaks > 0) {
+      const lineBreakCount = (com.match(/\n/g) || []).length;
+      if (lineBreakCount > maxLineBreaks) {
+        return new Response(
+          JSON.stringify({ success: false, error: `換行過多，最大 ${maxLineBreaks} 行` }),
+          {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          }
+        );
+      }
     }
 
     if (name.length > maxFieldLength || email.length > maxFieldLength || 
@@ -260,6 +299,21 @@ router.post('/api/post', async (request, env: Env) => {
     let imageData;
     let fileMD5: string | undefined;
     if (file && file.size > 0) {
+      // 檢查允許的副檔名
+      const allowedExts = await getConfigValue(env, 'allowed_extensions', 'jpg,jpeg,png,gif,webp,bmp');
+      const fileExt = file.name.split('.').pop()?.toLowerCase() || '';
+      const extList = allowedExts.split(',').map(e => e.trim().toLowerCase());
+      
+      if (!extList.includes(fileExt)) {
+        return new Response(
+          JSON.stringify({ success: false, error: `不支援的檔案格式：${fileExt}（允許：${allowedExts}）` }),
+          {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          }
+        );
+      }
+
       const valid = await fileio.validateImage(file);
       if (!valid) {
         return new Response(
@@ -869,6 +923,9 @@ router.get('/res/:no.htm', async (request, env: Env) => {
   const fieldTrapNames = getDefaultFieldTrapNames();
   const honeypotNames = getHoneypotNames();
 
+  // 顯示設定
+  const showImgWH = await getConfigValue(env, 'show_imgwh', '1') === '1';
+
   const html = `<!DOCTYPE html>
 <html lang="${env.DEFAULT_LANGUAGE || 'zh-TW'}">
 <head>
@@ -933,7 +990,8 @@ router.get('/res/:no.htm', async (request, env: Env) => {
               <img src="/thumb/${post.tim}s.jpg" alt="${htmlEscape(post.filename)}">
             </a>
             <div class="file-info">
-              ${htmlEscape(post.filename)} (${post.w}x${post.h})<br>
+              ${htmlEscape(post.filename)}<br>
+              ${showImgWH ? `${post.w}x${post.h}<br>` : ''}
               ${post.filesize} bytes
             </div>
           </div>
@@ -3218,6 +3276,9 @@ export default {
 async function getHomePage(env: Env, page: number = 1, request?: Request): Promise<string> {
   const title = await getConfigValue(env, 'title', 'Pixmicat!-CF');
   const defaultName = await getConfigValue(env, 'default_name', '無名氏');
+  const defaultTitle = await getConfigValue(env, 'default_title', '');
+  const defaultComment = await getConfigValue(env, 'default_comment', '');
+  const additionInfo = await getConfigValue(env, 'addition_info', '');
   const threadsPerPage = parseInt(await getConfigValue(env, 'threads_per_page', '15'));
 
   // 檢查是否為管理員
@@ -3227,6 +3288,10 @@ async function getHomePage(env: Env, page: number = 1, request?: Request): Promi
   // 取得欄位陷阱名稱
   const fieldTrapNames = getDefaultFieldTrapNames();
   const honeypotNames = getHoneypotNames();
+
+  // 顯示設定
+  const showImgWH = await getConfigValue(env, 'show_imgwh', '1') === '1';
+  const useFloatForm = await getConfigValue(env, 'use_float_form', '0') === '1';
 
   return `<!DOCTYPE html>
 <html lang="${env.DEFAULT_LANGUAGE || 'zh-TW'}">
@@ -3287,7 +3352,7 @@ async function getHomePage(env: Env, page: number = 1, request?: Request): Promi
           </tr>
           <tr>
             <td><label>標題</label></td>
-            <td><input type="text" name="${fieldTrapNames.subject}" id="sub"></td>
+            <td><input type="text" name="${fieldTrapNames.subject}" id="sub" value="${defaultTitle}"></td>
           </tr>
           <tr>
             <td><label>附檔</label></td>
@@ -3300,7 +3365,7 @@ async function getHomePage(env: Env, page: number = 1, request?: Request): Promi
           </tr>
           <tr>
             <td><label>內文</label></td>
-            <td><textarea name="${fieldTrapNames.comment}" id="com"></textarea></td>
+            <td><textarea name="${fieldTrapNames.comment}" id="com">${defaultComment}</textarea></td>
           </tr>
           <tr>
             <td><label>刪除用密碼</label></td>
@@ -3312,6 +3377,7 @@ async function getHomePage(env: Env, page: number = 1, request?: Request): Promi
           </tr>
         </table>
       </form>
+      ${additionInfo ? `<div style="text-align: center; margin: 10px 0; color: #800000;">${htmlEscape(additionInfo)}</div>` : ''}
     </div>
 
     <!-- 警告提示系統 -->
@@ -3385,6 +3451,26 @@ async function getHomePage(env: Env, page: number = 1, request?: Request): Promi
       if (savedEmail) {
         document.getElementById('email').value = savedEmail;
       }
+
+      ${useFloatForm ? `
+      // 浮動表單功能（USE_FLOATFORM）
+      const postFormDiv = document.querySelector('.post-form');
+      const formToggle = document.createElement('button');
+      formToggle.textContent = '▲ 發文表單';
+      formToggle.style.cssText = 'width:100%;padding:5px;margin-bottom:5px;cursor:pointer;background:#f0e0d6;border:1px solid #d9bfb7;';
+      
+      postFormDiv.parentNode.insertBefore(formToggle, postFormDiv);
+      
+      formToggle.addEventListener('click', function() {
+        if (postFormDiv.style.display === 'none') {
+          postFormDiv.style.display = '';
+          formToggle.textContent = '▲ 發文表單';
+        } else {
+          postFormDiv.style.display = 'none';
+          formToggle.textContent = '▼ 顯示發文表單';
+        }
+      });
+      ` : ''}
     });
 
     // 發文前保存到 Cookie
@@ -3659,7 +3745,9 @@ async function getHomePage(env: Env, page: number = 1, request?: Request): Promi
         html += '<a href="/img/' + post.tim + post.ext + '" target="_blank">';
         html += '<img src="/thumb/' + post.tim + 's.jpg" alt="">';
         html += '</a>';
-        html += '<div class="file-info">' + escapeHtml(post.filename || '') + ' (' + formatSize(post.filesize) + ')</div>';
+        html += '<div class="file-info">' + escapeHtml(post.filename || '');
+        ${showImgWH ? `if (post.w && post.h) { html += ' (' + post.w + 'x' + post.h + ')'; }` : ''}
+        html += ' - ' + formatSize(post.filesize) + '</div>';
         html += '</div>';
       }
 
