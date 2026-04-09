@@ -19,13 +19,21 @@ export interface Post {
   h?: number;
   thumbnail_w?: number;
   thumbnail_h?: number;
+  tn_w?: number;
+  tn_h?: number;
   md5?: string;
   category?: string;
   sticky?: number;
   locked?: number;
   is_sage?: number;
+  status?: number;
+  ip?: string;
   uid?: string;
   host?: string;
+  last_modified?: number;
+  root?: number;
+  reply_count?: number;
+  thumbnail?: string;
 }
 
 export interface ThreadPagination {
