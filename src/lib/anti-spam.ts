@@ -13,6 +13,7 @@ export interface AntiSpamConfig {
   enableDNSBL: boolean;
   dnsblServers: string[];
   dnsblWhitelist: string[];
+  banPatterns: string[];
   trustProxyHeaders: boolean;
 }
 
@@ -40,6 +41,7 @@ export class AntiSpamSystem {
         'bl.spamcop.net'
       ]),
       dnsblWhitelist: await this.getStringArrayConfig('dnsbl_whitelist', []),
+      banPatterns: await this.getStringArrayConfig('ban_patterns', []),
       trustProxyHeaders: (await this.getEnvValue('trust_proxy_headers', '0')) === '1',
     };
   }
@@ -100,7 +102,9 @@ export class AntiSpamSystem {
    */
   async checkIPBan(request: Request): Promise<SpamCheckResult> {
     const ip = this.getClientIP(request);
+    const config = await this.getConfig();
 
+    // 1. 檢查資料庫中的明確 IP 封鎖
     const result = await this.env.DB.prepare(
       'SELECT * FROM bans WHERE ip = ? AND (expires_at IS NULL OR expires_at > ?)'
     )
@@ -113,6 +117,82 @@ export class AntiSpamSystem {
         reason: 'IP被封鎖',
         details: (result as any).reason || '無資訊',
       };
+    }
+
+    // 2. 檢查 IP 模式封鎖（BANPATTERN）
+    if (config.banPatterns.length > 0) {
+      const patternResult = this.checkBanPatterns(ip, config.banPatterns);
+      if (patternResult.isSpam) {
+        return patternResult;
+      }
+    }
+
+    return { isSpam: false };
+  }
+
+  /**
+   * 檢查 IP 模式封鎖
+   */
+  checkBanPatterns(ip: string, patterns: string[]): SpamCheckResult {
+    for (const pattern of patterns) {
+      try {
+        // 支援多種模式格式：
+        // 1. CIDR (如 192.168.0.0/16) - 簡化為前綴匹配
+        // 2. 萬用字元 (如 192.168.*.*) - 轉為正規表達式
+        // 3. 正規表達式 (如 /^192\.168\./)
+
+        let regex: RegExp;
+
+        if (pattern.includes('/')) {
+          // CIDR 表示法（簡化版：只支援 /8, /16, /24）
+          const [base, mask] = pattern.split('/');
+          const maskBits = parseInt(mask);
+          
+          if (maskBits === 8) {
+            regex = new RegExp(`^${base.split('.')[0']}\\.`);
+          } else if (maskBits === 16) {
+            const parts = base.split('.');
+            regex = new RegExp(`^${parts[0]}\\.${parts[1]}\\.`);
+          } else if (maskBits === 24) {
+            const parts = base.split('.');
+            regex = new RegExp(`^${parts[0]}\\.${parts[1]}\\.${parts[2]}\\.`);
+          } else {
+            // 不支援的 CIDR，跳過
+            continue;
+          }
+        } else if (pattern.includes('*')) {
+          // 萬用字元模式
+          const regexPattern = pattern
+            .replace(/\./g, '\\.')
+            .replace(/\*/g, '.*');
+          regex = new RegExp(`^${regexPattern}$`);
+        } else if (pattern.startsWith('/') && pattern.endsWith('/')) {
+          // 正規表達式
+          regex = new RegExp(pattern.slice(1, -1));
+        } else {
+          // 精確匹配
+          if (ip === pattern) {
+            return {
+              isSpam: true,
+              reason: 'IP符合封鎖模式',
+              details: `符合模式：${pattern}`,
+            };
+          }
+          continue;
+        }
+
+        if (regex.test(ip)) {
+          return {
+            isSpam: true,
+            reason: 'IP符合封鎖模式',
+            details: `符合模式：${pattern}`,
+          };
+        }
+      } catch (error) {
+        console.error(`Invalid ban pattern: ${pattern}`, error);
+        // 無效的模式，跳過
+        continue;
+      }
     }
 
     return { isSpam: false };
