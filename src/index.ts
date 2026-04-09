@@ -9,6 +9,7 @@ import { FileIOR2 } from './lib/fileio-r2';
 import { AdminSystem } from './lib/admin';
 import { AntiSpamSystem } from './lib/anti-spam';
 import { getHoneypotNames, validateHoneypot, getDefaultFieldTrapNames } from './lib/field-trap';
+import type { Env } from './types';
 
 // 建立路由器
 const router = Router();
@@ -121,7 +122,7 @@ router.post('/api/post', async (request, env: Env) => {
     
     const resto = parseInt(formData.get('resto')?.toString() || '0');
     let name = formData.get(fieldTrapNames.name)?.toString() || '無名氏';
-    const email = formData.get(fieldTrapNames.email)?.toString() || '';
+    let email = formData.get(fieldTrapNames.email)?.toString() || '';
     let sub = formData.get(fieldTrapNames.subject)?.toString() || '';
     let com = formData.get(fieldTrapNames.comment)?.toString() || '';
     const password = formData.get('password')?.toString() || '';
