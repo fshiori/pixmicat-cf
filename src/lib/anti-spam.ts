@@ -147,9 +147,9 @@ export class AntiSpamSystem {
           // CIDR 表示法（簡化版：只支援 /8, /16, /24）
           const [base, mask] = pattern.split('/');
           const maskBits = parseInt(mask);
-          
+
           if (maskBits === 8) {
-            regex = new RegExp(`^${base.split('.')[0']}\\.`);
+            regex = new RegExp(`^${base.split('.')[0]}\\.`);
           } else if (maskBits === 16) {
             const parts = base.split('.');
             regex = new RegExp(`^${parts[0]}\\.${parts[1]}\\.`);
