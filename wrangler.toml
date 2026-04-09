@@ -1,0 +1,30 @@
+name = "pixmicat-cf"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Cloudflare Features
+[features]
+image_resizing = true
+
+# D1 Database Binding
+[[d1_databases]]
+binding = "DB"
+database_name = "pixmicat-db"
+database_id = "local" # 本地開發用自動建立的 DB
+
+# R2 Storage Binding
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "pixmicat-storage"
+
+# KV Storage for cache and config
+[[kv_namespaces]]
+binding = "KV"
+id = "local" # 本地開發用
+
+# Environment variables
+[vars]
+ENVIRONMENT = "development"
+TIME_ZONE = "+8"
+DEFAULT_LANGUAGE = "zh_TW"

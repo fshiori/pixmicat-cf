@@ -1,0 +1,11 @@
+# 本地開發環境變數範例
+# 複製此檔案為 .dev.vars 並填入實際值
+
+# 管理員設定
+ADMIN_PASSWORD=your-admin-password-here
+ADMIN_CAP_NAME=futaba
+ADMIN_CAP_PASSWORD=futaba
+
+# 其他設定（可選）
+# ENVIRONMENT=development
+# DEBUG=false

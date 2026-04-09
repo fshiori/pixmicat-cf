@@ -1,0 +1,34 @@
+# Node modules
+node_modules/
+package-lock.json
+yarn.lock
+
+# Cloudflare
+.wrangler/
+.dev.vars
+worker-configuration.d.ts
+
+# 環境變數
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 建置輸出
+dist/
+public/static/
+public/templates/
+
+# 測試
+coverage/
+.nyc_output/

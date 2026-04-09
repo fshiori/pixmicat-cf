@@ -1,0 +1,32 @@
+{
+  "name": "pixmicat-cf",
+  "version": "1.0.0",
+  "description": "Pixmicat! Imageboard System for Cloudflare Workers",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "d2:create": "wrangler d2 create pixmicat-db",
+    "d2:migrate": "wrangler d2 migrations apply pixmicat-db --remote",
+    "d2:migrate:local": "wrangler d2 migrations apply pixmicat-db --local",
+    "tail": "wrangler tail",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": [
+    "imageboard",
+    "pixmicat",
+    "cloudflare",
+    "workers"
+  ],
+  "author": "",
+  "license": "Artistic-2.0",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241127.0",
+    "typescript": "^5.7.2",
+    "wrangler": "^3.94.0"
+  },
+  "dependencies": {
+    "itty-router": "^4.0.20",
+    "sharp": "^0.33.5"
+  }
+}
