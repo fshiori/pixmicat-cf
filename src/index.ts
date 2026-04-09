@@ -426,7 +426,7 @@ router.post('/api/post', async (request, env: Env) => {
 
     // 檢討論串回應數量（MAX_RES 設定：超過此數量自動 sage）
     if (resto > 0 && !isSage) {
-      const maxRes = parseInt(await getConfigValue(env, 'max_res', '0'));
+      const maxRes = parseInt(await getConfigValue(env, 'auto_bump_limit', '0'));
       if (maxRes > 0) {
         const thread = await pio.getThread(resto, 0);
         if (thread && thread.reply_count >= maxRes) {
@@ -925,7 +925,7 @@ router.get('/res/:no.htm', async (request, env: Env) => {
   const honeypotNames = getHoneypotNames();
 
   // 顯示設定
-  const showImgWH = await getConfigValue(env, 'show_imgwh', '1') === '1';
+  const showImgWH = await getConfigValue(env, 'show_image_dimensions', '1') === '1';
 
   const html = `<!DOCTYPE html>
 <html lang="${env.DEFAULT_LANGUAGE || 'zh-TW'}">
@@ -3279,7 +3279,7 @@ async function getHomePage(env: Env, page: number = 1, request?: Request): Promi
   const defaultName = await getConfigValue(env, 'default_name', '無名氏');
   const defaultTitle = await getConfigValue(env, 'default_title', '');
   const defaultComment = await getConfigValue(env, 'default_comment', '');
-  const additionInfo = await getConfigValue(env, 'addition_info', '');
+  const additionInfo = await getConfigValue(env, 'form_notice', '');
   const threadsPerPage = parseInt(await getConfigValue(env, 'threads_per_page', '15'));
 
   // 檢查是否為管理員
@@ -3291,8 +3291,8 @@ async function getHomePage(env: Env, page: number = 1, request?: Request): Promi
   const honeypotNames = getHoneypotNames();
 
   // 顯示設定
-  const showImgWH = await getConfigValue(env, 'show_imgwh', '1') === '1';
-  const useFloatForm = await getConfigValue(env, 'use_float_form', '0') === '1';
+  const showImgWH = await getConfigValue(env, 'show_image_dimensions', '1') === '1';
+  const useFloatForm = await getConfigValue(env, 'use_floating_form', '0') === '1';
 
   return `<!DOCTYPE html>
 <html lang="${env.DEFAULT_LANGUAGE || 'zh-TW'}">
@@ -3949,23 +3949,52 @@ async function getHomePage(env: Env, page: number = 1, request?: Request): Promi
 </html>`;
 }
 
+const CONFIG_KEY_ALIASES: Record<string, string[]> = {
+  // 新版鍵名 => 舊版/相容鍵名
+  show_image_dimensions: ['show_imgwh'],
+  use_floating_form: ['use_float_form'],
+  form_notice: ['addition_info'],
+  auto_bump_limit: ['max_res', 'bump_limit'],
+  trust_http_x_forwarded_for: ['trust_proxy_headers'],
+};
+
 async function getConfigValue(env: Env, key: string, defaultValue: string): Promise<string> {
-  // 先從 KV 讀取
-  const cached = await env.KV.get(`config:${key}`);
-  if (cached) return cached;
+  const keysToTry = [key, ...(CONFIG_KEY_ALIASES[key] || [])];
 
-  // 從 D1 讀取
-  const result = await env.DB
-    .prepare('SELECT value FROM configs WHERE key = ?')
-    .bind(key)
-    .first<{ value: string }>();
+  // 先從 KV 讀取（支援 alias）
+  for (const k of keysToTry) {
+    const cached = await env.KV.get(`config:${k}`);
+    if (cached !== null) {
+      // 回寫主要 key 快取，統一後續讀取
+      if (k !== key) {
+        await env.KV.put(`config:${key}`, cached, { expirationTtl: 3600 });
+      }
+      return cached;
+    }
+  }
 
-  const value = result?.value || defaultValue;
+  // 從 D1 讀取（支援 alias）
+  for (const k of keysToTry) {
+    const result = await env.DB
+      .prepare('SELECT value FROM configs WHERE key = ?')
+      .bind(k)
+      .first<{ value: string }>();
 
-  // 快取到 KV
-  await env.KV.put(`config:${key}`, value, { expirationTtl: 3600 });
+    if (result?.value !== undefined) {
+      const value = result.value;
+      // 快取主要 key
+      await env.KV.put(`config:${key}`, value, { expirationTtl: 3600 });
+      // 若命中 alias，也快取 alias 本身避免重查
+      if (k !== key) {
+        await env.KV.put(`config:${k}`, value, { expirationTtl: 3600 });
+      }
+      return value;
+    }
+  }
 
-  return value;
+  // 找不到時使用預設值並快取
+  await env.KV.put(`config:${key}`, defaultValue, { expirationTtl: 3600 });
+  return defaultValue;
 }
 
 async function hashPassword(password: string): Promise<string> {

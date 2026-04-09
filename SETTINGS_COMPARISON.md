@@ -1,5 +1,7 @@
 # Pixmicat 設定功能比較
 
+> 注意：此文件部分內容已過時，最新精細對比請看 `REF_PARITY_REPORT.md`。
+
 ## 原本 Pixmicat (PHP) 的設定
 
 ### 1. 程式基本設定

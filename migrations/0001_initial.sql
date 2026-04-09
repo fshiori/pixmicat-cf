@@ -116,4 +116,10 @@ INSERT INTO configs (key, value, description, updated_at) VALUES
   ('default_title', '無標題', '預設文章標題', strftime('%s', 'now')),
   ('default_comment', '無內文', '預設文章內文', strftime('%s', 'now')),
   ('form_notice', '• 附檔請使用圖片 (GIF, JPG, PNG, WEBP)<br>• 請勿上傳違法圖片<br>• 同一 IP 60秒內只能發文一次', '表單說明文字', strftime('%s', 'now')),
+  -- 相容/安全相關設定
+  ('re_page_def', '0', '單一討論串回應每頁顯示數 (0=不分頁)', strftime('%s', 'now')),
+  ('clear_sage', '0', '是否清除 E-mail 欄位中的 sage (0=否, 1=是)', strftime('%s', 'now')),
+  ('max_line_breaks', '50', '內文換行數上限', strftime('%s', 'now')),
+  ('enable_duplicate_check', '1', '是否啟用附檔 MD5 重複檢查 (0=否, 1=是)', strftime('%s', 'now')),
+  ('trust_http_x_forwarded_for', '0', '是否信任 X-Forwarded-For 等 Proxy Header (0=否, 1=是)', strftime('%s', 'now')),
   ('max_age_time', '0', '討論串可接受推文的時間範圍-小時 (0=不限制)', strftime('%s', 'now'));
