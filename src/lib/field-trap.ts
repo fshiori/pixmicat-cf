@@ -16,14 +16,14 @@ export interface FieldTrapConfig {
  * 格式：6-10 個英數大小寫字元，第一位不能是數字
  */
 function generateFieldName(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
   const firstChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 
   let name = '';
   // 第一位：字母
   name += firstChars.charAt(Math.floor(Math.random() * firstChars.length));
 
-  // 後續位：6-9 個字元（總共 7-10 個）
+  // 後續位：6-9 個字元（總共 7-10 個），只使用字母
   const length = 6 + Math.floor(Math.random() * 4); // 6-9
   for (let i = 0; i < length; i++) {
     name += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -62,20 +62,16 @@ export function getDefaultFieldTrapNames(): FieldTrapConfig {
  * 這些是吸引 spam bot 的陷阱欄位
  */
 export interface HoneypotConfig {
-  name: string;
-  email: string;
-  subject: string;
-  comment: string;
-  reply: string;
+  name1: string;
+  name2: string;
+  name3: string;
 }
 
 export function getHoneypotNames(): HoneypotConfig {
   return {
-    name: 'hp_name',
-    email: 'hp_email',
-    subject: 'hp_sub',
-    comment: 'hp_com',
-    reply: 'hp_reply',
+    name1: 'hp_website',
+    name2: 'hp_url',
+    name3: 'hp_company',
   };
 }
 
@@ -83,9 +79,13 @@ export function getHoneypotNames(): HoneypotConfig {
  * 驗證 honeypot 欄位是否為空
  * 如果任何 honeypot 欄位有值，則可能是 spam bot
  */
-export function validateHoneypot(formData: FormData | Record<string, any>, honeypotConfig?: HoneypotConfig): { valid: boolean; errors: string[] } {
+export function validateHoneypot(
+  formData: FormData | Record<string, any>, 
+  honeypotConfig?: HoneypotConfig
+): { valid: boolean; triggered: number; errors: string[] } {
   const honeypotNames = honeypotConfig || getHoneypotNames();
   const errors: string[] = [];
+  let triggered = 0;
 
   for (const [key, name] of Object.entries(honeypotNames)) {
     let value: any;
@@ -98,12 +98,14 @@ export function validateHoneypot(formData: FormData | Record<string, any>, honey
     
     if (value !== null && value !== undefined && value !== '' && value !== 'false') {
       // honeypot 欄位被填寫了，可能是 bot
+      triggered++;
       errors.push(`Honeypot field ${key} was filled: ${name}`);
     }
   }
 
   return {
-    valid: errors.length === 0,
+    valid: triggered === 0,
+    triggered,
     errors,
   };
 }
@@ -112,8 +114,12 @@ export function validateHoneypot(formData: FormData | Record<string, any>, honey
  * 驗證欄位陷阱
  * 檢查表單是否使用了正確的隨機欄位名稱
  */
-export function verifyFieldTrap(formData: FormData | Record<string, any>, fieldConfig: FieldTrapConfig): { valid: boolean; errors: string[] } {
+export function verifyFieldTrap(
+  formData: FormData | Record<string, any>, 
+  fieldConfig: FieldTrapConfig
+): { valid: boolean; triggered: number; errors: string[] } {
   const errors: string[] = [];
+  let triggered = 0;
   
   // 檢查是否使用了舊的固定欄位名稱
   const oldFieldNames = ['name', 'email', 'subject', 'comment'];
@@ -127,12 +133,33 @@ export function verifyFieldTrap(formData: FormData | Record<string, any>, fieldC
     }
     
     if (hasOldField) {
-      errors.push(`Detected old field name: ${oldName}`);
+      triggered++;
+      errors.push('Detected old field names');
+    }
+  }
+  
+  // 檢查是否缺少必需的隨機欄位
+  const requiredFields = ['name', 'email', 'subject', 'comment'];
+  for (const [key, randomName] of Object.entries(fieldConfig)) {
+    if (requiredFields.includes(key)) {
+      let hasField = false;
+      
+      if (formData instanceof FormData) {
+        hasField = formData.has(randomName);
+      } else {
+        hasField = randomName in formData;
+      }
+      
+      if (!hasField) {
+        triggered++;
+        errors.push(`Missing required field: ${key}`);
+      }
     }
   }
   
   return {
-    valid: errors.length === 0,
+    valid: triggered === 0,
+    triggered,
     errors,
   };
 }
