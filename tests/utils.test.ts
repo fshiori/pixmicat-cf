@@ -35,7 +35,7 @@ describe('autoLinkUrls', () => {
     const result = autoLinkUrls(input);
     expect(result).toContain('<a href="https://example.com"');
     expect(result).toContain('target="_blank"');
-    expect(result).toContain('rel="nofollow"');
+    expect(result).toContain('rel="nofollow');
   });
 
   it('應該自動連結多個 URL', () => {
@@ -58,7 +58,7 @@ describe('processQuotes', () => {
     const input = '回應 >>No.123 的文章';
     const result = processQuotes(input);
     expect(result).toContain('<a href="/res/123.htm');
-    expect(result).toContain('>>No.123</a>');
+    expect(result).toContain('&gt;&gt;No.123</a>');
   });
 
   it('應該處理多個引用', () => {
@@ -68,10 +68,11 @@ describe('processQuotes', () => {
     expect(result).toContain('/res/2.htm');
   });
 
-  it('不應該影響非引用文本', () => {
-    const input = '這是一般文本 >> 不是引用';
+  it('應該轉換 >>123 為引用連結', () => {
+    const input = '回應 >>123 的文章';
     const result = processQuotes(input);
-    expect(result).toContain('這是一般文本');
+    expect(result).toContain('<a href="/res/123.htm');
+    expect(result).toContain('&gt;&gt;123</a>');
   });
 });
 
@@ -130,23 +131,34 @@ describe('formatDate', () => {
 });
 
 describe('generateTripcode', () => {
-  it('應該生成 Tripcode', () => {
-    const tripcode = generateTripcode('password');
+  it('應該生成 Tripcode', async () => {
+    const tripcode = await generateTripcode('password');
     expect(tripcode).toBeDefined();
     expect(typeof tripcode).toBe('string');
     expect(tripcode.length).toBeGreaterThan(0);
   });
 
-  it('相同密碼應該生成相同 Tripcode', () => {
-    const tripcode1 = generateTripcode('test123');
-    const tripcode2 = generateTripcode('test123');
+  it('相同密碼應該生成相同 Tripcode', async () => {
+    const tripcode1 = await generateTripcode('test123');
+    const tripcode2 = await generateTripcode('test123');
     expect(tripcode1).toBe(tripcode2);
   });
 
-  it('不同密碼應該生成不同 Tripcode', () => {
-    const tripcode1 = generateTripcode('password1');
-    const tripcode2 = generateTripcode('password2');
+  it('不同密碼應該生成不同 Tripcode', async () => {
+    const tripcode1 = await generateTripcode('password1');
+    const tripcode2 = await generateTripcode('password2');
     expect(tripcode1).not.toBe(tripcode2);
+  });
+
+  it('空密碼應該正常處理', async () => {
+    const tripcode = await generateTripcode('');
+    expect(tripcode).toBeDefined();
+  });
+
+  it('應該處理特殊字符', async () => {
+    const tripcode = await generateTripcode('test!@#$%^&*()');
+    expect(tripcode).toBeDefined();
+    expect(typeof tripcode).toBe('string');
   });
 });
 

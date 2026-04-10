@@ -27,7 +27,7 @@ describe('整合測試', () => {
       // 模擬創建文章
       (mockEnv.DB.prepare as any).mockReturnValue({
         bind: vi.fn(() => ({
-          run: vi.fn(() => Promise.resolve({ meta: { last_row_id: 1 })),
+          run: vi.fn(() => Promise.resolve({ meta: { last_row_id: 1 } })),
         })),
       });
 
@@ -48,7 +48,7 @@ describe('整合測試', () => {
       // 模擬創建回應
       (mockEnv.DB.prepare as any).mockReturnValue({
         bind: vi.fn(() => ({
-          run: vi.fn(() => Promise.resolve({ meta: { last_row_id: 2 })),
+          run: vi.fn(() => Promise.resolve({ meta: { last_row_id: 2 } })),
         })),
       });
 

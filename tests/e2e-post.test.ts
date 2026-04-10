@@ -2,18 +2,23 @@
  * E2E 測試 - 發文流程
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { PIOD1 } from '../src/lib/pio-d1';
 import { FileIOR2 } from '../src/lib/fileio-r2';
 import { AntiSpamSystem } from '../src/lib/anti-spam';
 import { AdminSystem } from '../src/lib/admin';
-import { FieldTrapSystem } from '../src/lib/field-trap';
 import {
   generateTripcode,
   htmlEscape,
   processComment,
   calculateSage,
 } from '../src/lib/utils';
+import {
+  getDefaultFieldTrapNames,
+  getHoneypotNames,
+  verifyFieldTrap,
+  validateHoneypot,
+} from '../src/lib/field-trap';
 import type { MockEnv } from './types';
 
 describe('E2E - 發文流程', () => {
@@ -22,7 +27,6 @@ describe('E2E - 發文流程', () => {
   let fileio: FileIOR2;
   let antiSpam: AntiSpamSystem;
   let admin: AdminSystem;
-  let fieldTrap: FieldTrapSystem;
 
   beforeAll(() => {
     // 創建完整的模擬環境
@@ -63,7 +67,6 @@ describe('E2E - 發文流程', () => {
     fileio = new FileIOR2(mockEnv.STORAGE as any);
     antiSpam = new AntiSpamSystem(mockEnv as any);
     admin = new AdminSystem(mockEnv as any);
-    fieldTrap = new FieldTrapSystem();
   });
 
   describe('完整發文流程', () => {
@@ -106,23 +109,22 @@ describe('E2E - 發文流程', () => {
       expect(isSage).toBe(false);
 
       // Field Trap 驗證
-      const fieldNames = fieldTrap.getDefaultFieldTrapNames();
-      const honeypotNames = fieldTrap.getHoneypotNames();
+      const fieldNames = getDefaultFieldTrapNames();
+      const honeypotNames = getHoneypotNames();
 
       const formData = {
         [fieldNames.name]: postData.name,
         [fieldNames.email]: postData.email,
         [fieldNames.subject]: postData.sub,
         [fieldNames.comment]: postData.com,
-        [honeypotNames.name1]: '', // honeypot 必須為空
-        [honeypotNames.name2]: '',
-        [honeypotNames.name3]: '',
+        [honeypotNames.name]: '', // honeypot 必須為空
+        [honeypotNames.email]: '',
       };
 
-      const fieldCheck = fieldTrap.verifyFieldTrap(formData, fieldNames);
+      const fieldCheck = verifyFieldTrap(formData, fieldNames);
       expect(fieldCheck.valid).toBe(true);
 
-      const honeypotCheck = fieldTrap.validateHoneypot(formData, honeypotNames);
+      const honeypotCheck = validateHoneypot(formData, honeypotNames);
       expect(honeypotCheck.valid).toBe(true);
 
       // 反垃圾檢查
@@ -165,26 +167,25 @@ describe('E2E - 發文流程', () => {
     });
 
     it('應該拒絕 spam bot 填充 honeypot', async () => {
-      const fieldNames = fieldTrap.getDefaultFieldTrapNames();
-      const honeypotNames = fieldTrap.getHoneypotNames();
+      const fieldNames = getDefaultFieldTrapNames();
+      const honeypotNames = getHoneypotNames();
 
       const botFormData = {
         [fieldNames.name]: 'Spam Bot',
         [fieldNames.email]: 'spam@bot.com',
         [fieldNames.subject]: 'Spam',
         [fieldNames.comment]: 'Buy viagra!',
-        [honeypotNames.name1]: 'bot filled this', // honeypot 被填充！
-        [honeypotNames.name2]: '',
-        [honeypotNames.name3]: '',
+        [honeypotNames.name]: 'bot filled this', // honeypot 被填充！
+        [honeypotNames.email]: '',
       };
 
-      const honeypotCheck = fieldTrap.validateHoneypot(botFormData, honeypotNames);
+      const honeypotCheck = validateHoneypot(botFormData, honeypotNames);
       expect(honeypotCheck.valid).toBe(false);
       expect(honeypotCheck.triggered).toBe(1);
     });
 
     it('應該拒絕使用舊欄位名稱的 bot', async () => {
-      const fieldNames = fieldTrap.getDefaultFieldTrapNames();
+      const fieldNames = getDefaultFieldTrapNames();
 
       const oldBotFormData = {
         'name': 'Old Bot',
@@ -193,7 +194,7 @@ describe('E2E - 發文流程', () => {
         'comment': 'Old spam content',
       };
 
-      const fieldCheck = fieldTrap.verifyFieldTrap(oldBotFormData, fieldNames);
+      const fieldCheck = verifyFieldTrap(oldBotFormData, fieldNames);
       expect(fieldCheck.valid).toBe(false);
       expect(fieldCheck.errors).toContain('Detected old field names');
     });
@@ -232,7 +233,7 @@ describe('E2E - 發文流程', () => {
       const result = processComment(input, false, true);
 
       expect(result).toContain('/res/123.htm');
-      expect(result).toContain('>>No.123</a>');
+      expect(result).toContain('&gt;&gt;No.123</a>');
     });
 
     it('應該同時處理自動連結和引用', () => {
