@@ -99,7 +99,24 @@ wrangler kv namespace create pixmicat-kv
 
 ### 6. 設定環境變數
 
-複製 `.dev.vars.example` 到 `.dev.vars`（本地）或在 Cloudflare Dashboard 設定。
+1. **複製 wrangler.toml.example 為 wrangler.toml.local**:
+```bash
+cp wrangler.toml.example wrangler.toml.local
+```
+
+2. **修改 wrangler.toml.local 中的資源 ID**:
+   - `account_id`: 在 [Cloudflare Dashboard](https://dash.cloudflare.com) 右上角找到
+   - `database_id`: 執行 `wrangler d1 create pixmicat-db` 後獲得
+   - R2 和 KV ID 同理
+
+3. **設定 .dev.vars**（本地開發）或在 Cloudflare Dashboard 設定環境變數
+
+4. **部署時使用本地配置**:
+```bash
+# 使用 wrangler.toml.local 部署
+cp wrangler.toml.local wrangler.toml
+npm run deploy
+```
 
 ### 7. 本地開發
 

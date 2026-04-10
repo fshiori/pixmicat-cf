@@ -6,6 +6,8 @@ yarn.lock
 .wrangler/
 .dev.vars
 worker-configuration.d.ts
+wrangler.toml.local
+wrangler.toml.*.local
 
 # 環境變數
 .env
