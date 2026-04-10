@@ -46,7 +46,7 @@ export interface FileIO {
   /**
    * 取得縮圖 URL
    */
-  getThumbnailUrl(tim: string): string;
+  getThumbnailUrl(tim: string, ext?: string, maxWidth?: number, maxHeight?: number): string;
 
   /**
    * 檢查檔案是否存在

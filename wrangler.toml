@@ -2,30 +2,23 @@ name = "pixmicat-cf"
 main = "src/index.ts"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
-
-# ⚠️ 注意：部署前請修改以下 ID 為你自己的 Cloudflare 資源 ID
-# 可以在 Cloudflare Dashboard 中找到這些值
-# account_id: https://dash.cloudflare.com → 右上角 → Get your Account ID
-account_id = "YOUR_ACCOUNT_ID"
+account_id = "4fae982a30d8f623b835b46bba03e72c"
 
 # D1 Database Binding
-# 建立指令: wrangler d1 create pixmicat-db
 [[d1_databases]]
 binding = "DB"
 database_name = "pixmicat-db"
-database_id = "YOUR_D1_DATABASE_ID"
+database_id = "6a93ae9d-b83b-4a3f-b06b-d122a56c73ff"
 
 # R2 Storage Binding
-# 建立指令: wrangler r2 bucket create pixmicat-storage
 [[r2_buckets]]
 binding = "STORAGE"
 bucket_name = "pixmicat-storage"
 
 # KV Storage for cache and config
-# 建立指令: wrangler kv namespace create pixmicat-kv
 [[kv_namespaces]]
 binding = "KV"
-id = "YOUR_KV_NAMESPACE_ID"
+id = "a7b78e79f9524be891f8035029d97ee4"
 
 # Environment variables
 [vars]
