@@ -218,17 +218,29 @@ describe('AdminSystem', () => {
   describe('verifyCap', () => {
     it('應該識別管理員 Cap', async () => {
       // 設定預設管理員 Cap
-      mockEnv.DB.prepare = vi.fn(() => ({
-        bind: vi.fn(() => ({
-          first: vi.fn(() => Promise.resolve({
-            value: 'admin',
-          })),
-        })),
-      }));
+      const prepareMock = vi.fn();
+
+      mockEnv.DB.prepare = vi.fn((query: string) => {
+        const mockBind = vi.fn((param: string) => {
+          let value = null;
+
+          if (query.includes('cap_enable')) value = '1';
+          else if (query.includes('cap_name')) value = 'admin';
+          else if (query.includes('cap_password')) value = 'secret';
+          else if (query.includes('cap_suffix')) value = ' ★';
+          else if (query.includes('cap_allow_html')) value = '1';
+
+          return {
+            first: vi.fn(() => Promise.resolve(value ? { value } : null)),
+          };
+        });
+
+        return { bind: mockBind };
+      });
 
       const result = await admin.verifyCap('admin', 'admin@example.com');
       expect(result.isAdmin).toBe(true);
-      expect(result.capName).toBe('管理員');
+      expect(result.capName).toBe('admin');
     });
 
     it('應該識別一般用戶', async () => {
