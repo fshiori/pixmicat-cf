@@ -838,7 +838,7 @@ router.get('/img/:filename', async (request, env: Env) => {
 
 // 縮圖代理路由
 // 生產環境：使用 Cloudflare Image Resizing API
-// 本地開發：直接從 R2 返回原始圖片
+// 本地開發：使用 sharp 生成縮圖
 router.get('/thumb/:filename', async (request, env: Env) => {
   // 提取 tim（去掉 's' 後綴）
   const filename = request.params.filename;
@@ -847,7 +847,7 @@ router.get('/thumb/:filename', async (request, env: Env) => {
   // 嘗試從 R2 取得原始圖片
   let object: R2Object | null = null;
   const extensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
-  
+
   for (const ext of extensions) {
     object = await env.STORAGE.get(tim + ext);
     if (object) break;
@@ -865,20 +865,45 @@ router.get('/thumb/:filename', async (request, env: Env) => {
     const url = new URL(request.url);
     const originalExt = object.key?.split('.').pop() || 'jpg';
     const cfImageUrl = `${url.protocol}//${url.host}/cdn-cgi/image/width=250,height=250,quality=75,format=auto,fit=cover/img/${tim}.${originalExt}`;
-    
+
     // 返回 307 重定向到 Cloudflare Image Resizing URL
     return Response.redirect(cfImageUrl, 307);
   }
 
-  // 本地開發環境：直接返回原始圖片
-  const headers = new Headers();
-  headers.set('Content-Type', object.httpMetadata?.contentType || 'image/jpeg');
-  headers.set('Content-Length', object.size.toString());
-  headers.set('etag', object.httpEtag || '');
-  headers.set('Cache-Control', 'public, max-age=31536000');
+  // 本地開發環境：使用 sharp 生成縮圖
+  try {
+    const { generateLocalThumbnail } = await import('./lib/image-local.js');
+    const originalImage = await object.arrayBuffer();
 
-  const data = await object.arrayBuffer();
-  return new Response(data, { headers });
+    // 生成縮圖（250x250, JPEG, quality 75）
+    const thumbnailBuffer = await generateLocalThumbnail(originalImage, {
+      width: 250,
+      height: 250,
+      quality: 75,
+      format: 'jpeg'
+    });
+
+    const headers = new Headers();
+    headers.set('Content-Type', 'image/jpeg');
+    headers.set('Content-Length', thumbnailBuffer.byteLength.toString());
+    headers.set('Cache-Control', 'public, max-age=31536000');
+    headers.set('X-Local-Thumbnail', 'true'); // 標記為本地生成的縮圖
+
+    return new Response(thumbnailBuffer, { headers });
+  } catch (error) {
+    // 如果 sharp 不可用，回退到原圖
+    console.warn('Local thumbnail generation failed, falling back to original image:', error);
+
+    const headers = new Headers();
+    headers.set('Content-Type', object.httpMetadata?.contentType || 'image/jpeg');
+    headers.set('Content-Length', object.size.toString());
+    headers.set('etag', object.httpEtag || '');
+    headers.set('Cache-Control', 'public, max-age=31536000');
+    headers.set('X-Thumbnail-Fallback', 'original');
+
+    const data = await object.arrayBuffer();
+    return new Response(data, { headers });
+  }
 });
 
 // 單一討論串頁面
