@@ -67,8 +67,15 @@ export class FileIOR2 implements FileIO {
     return `/img/${tim}${ext}`;
   }
 
-  getThumbnailUrl(tim: string): string {
-    return `/thumb/${tim}s.jpg`;
+  getThumbnailUrl(tim: string, ext?: string, maxWidth?: number, maxHeight?: number): string {
+    // 使用 Cloudflare Image Resizing（免費 URL 轉換方式）
+    // 格式：/cdn-cgi/image/width=250,height=250,quality=75,format=auto,fit=cover/img/tim.ext
+    const originalUrl = this.getImageUrl(tim, ext || '');
+    const width = maxWidth || 250;
+    const height = maxHeight || 250;
+    const options = `width=${width},height=${height},quality=75,format=auto,fit=cover`;
+    
+    return `/cdn-cgi/image/${options}${originalUrl}`;
   }
 
   async exists(tim: string, ext: string): Promise<boolean> {

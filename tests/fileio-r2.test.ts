@@ -98,9 +98,9 @@ describe('FileIOR2', () => {
   });
 
   describe('getThumbnailUrl', () => {
-    it('應該返回正確的縮圖 URL', () => {
-      const url = fileio.getThumbnailUrl('1234567890');
-      expect(url).toBe('/thumb/1234567890s.jpg');
+    it('應該返回正確的縮圖 URL（Cloudflare Image Resizing）', () => {
+      const url = fileio.getThumbnailUrl('1234567890', '.jpg');
+      expect(url).toBe('/cdn-cgi/image/width=250,height=250,quality=75,format=auto,fit=cover/img/1234567890.jpg');
     });
   });
 
