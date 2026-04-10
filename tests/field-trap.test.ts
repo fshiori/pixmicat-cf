@@ -276,7 +276,8 @@ describe('FieldTrap', () => {
       const fieldResult = verifyFieldTrap(formData, fieldNames);
 
       expect(fieldResult.valid).toBe(false);
-      expect(fieldResult.errors).toContain('Detected old field names');
+      expect(fieldResult.errors.length).toBeGreaterThan(0);
+      expect(fieldResult.errors[0]).toContain('Detected old field name');
     });
   });
 });

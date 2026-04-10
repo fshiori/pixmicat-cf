@@ -5,6 +5,7 @@
 
 import type { FileIO } from './fileio-interface';
 import type { ImageInfo, Env } from '../types';
+import { calculateMD5 } from './md5';
 
 export class FileIOR2 implements FileIO {
   private r2: R2Bucket;
@@ -53,8 +54,13 @@ export class FileIOR2 implements FileIO {
   }
 
   async deleteImage(tim: string, ext: string): Promise<void> {
-    await this.r2.delete(`${tim}${ext}`);
-    await this.r2.delete(`${tim}s.jpg`); // 縮圖
+    try {
+      await this.r2.delete(`${tim}${ext}`);
+      await this.r2.delete(`${tim}s.jpg`); // 縮圖
+    } catch (error) {
+      // 忽略刪除錯誤，可能檔案不存在
+      // 符合 interface 預期：deleteImage 返回 void，不應該拋出錯誤
+    }
   }
 
   getImageUrl(tim: string, ext: string): string {
@@ -81,15 +87,7 @@ export class FileIOR2 implements FileIO {
   }
 
   async calculateMD5(file: File | Uint8Array): Promise<string> {
-    let arrayBuffer: ArrayBuffer;
-    if (file instanceof Uint8Array) {
-      arrayBuffer = file.buffer as ArrayBuffer;
-    } else {
-      arrayBuffer = await file.arrayBuffer();
-    }
-    const hashBuffer = await crypto.subtle.digest('MD5', arrayBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return calculateMD5(file);
   }
 
   async validateImage(file: File): Promise<boolean> {
@@ -226,18 +224,18 @@ export class FileIOR2 implements FileIO {
 
     // GIF
     if (view.getUint16(0) === 0x4749) {
-      const width = view.getUint16(6);
-      const height = view.getUint16(8);
+      const width = view.getUint16(6, true); // little-endian
+      const height = view.getUint16(8, true); // little-endian
       return { width, height };
     }
 
     // BMP
-    if (view.getUint16(0) === 0x4D42) { // 'BM'
+    if (view.getUint16(0, false) === 0x424D) { // 'BM' in big-endian
       // BMP 檔頭結構
       // offset 18-21: width
       // offset 22-25: height
       const width = view.getUint32(18, true); // little-endian
-      const height = view.getUint32(22, true);
+      const height = view.getUint32(22, true); // little-endian
       return { width, height };
     }
 
