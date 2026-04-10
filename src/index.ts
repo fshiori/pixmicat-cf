@@ -1308,7 +1308,7 @@ router.get('/category/:name', async (request, env: Env) => {
     return `
       <div class="post">
         <div class="post-header">
-          ${post.thumbnail ? `<img src="/thumb/${post.tim}s.jpg" class="thumbnail" alt="縮圖">` : ''}
+          ${post.tim && post.ext ? `<img src="/cdn-cgi/image/width=100,height=100,quality=75,format=auto,fit=cover/img/${post.tim}${post.ext}" class="thumbnail" alt="縮圖">` : ''}
           <strong>No.${post.no}</strong>
           ${post.name !== defaultName ? `<strong>${htmlEscape(post.name)}</strong>` : htmlEscape(post.name)}
           ${post.email ? `<span style="color: #800000;">&lt;${htmlEscape(post.email)}&gt;</span>` : ''}
@@ -3995,10 +3995,10 @@ async function getHomePage(env: Env, page: number = 1, request?: Request): Promi
       if (post.tim && post.ext) {
         html += '<div class="post-image">';
         html += '<a href="/img/' + post.tim + post.ext + '" target="_blank">';
-        html += '<img src="/thumb/' + post.tim + 's.jpg" alt="">';
+        html += '<img src="/cdn-cgi/image/width=200,height=200,quality=75,format=auto,fit=cover/img/' + post.tim + post.ext + '" alt="">';
         html += '</a>';
         html += '<div class="file-info">' + escapeHtml(post.filename || '');
-        ${showImgWH ? `if (post.w && post.h) { html += ' (' + post.w + 'x' + post.h + ')'; }` : ''}
+        if (post.w && post.h) { html += ' (' + post.w + 'x' + post.h + ')'; }
         html += ' - ' + formatSize(post.filesize) + '</div>';
         html += '</div>';
       }

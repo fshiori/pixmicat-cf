@@ -9,11 +9,9 @@ import { calculateMD5 } from './md5';
 
 export class FileIOR2 implements FileIO {
   private r2: R2Bucket;
-  private env: Env;
 
-  constructor(r2: R2Bucket, env: Env) {
+  constructor(r2: R2Bucket) {
     this.r2 = r2;
-    this.env = env;
   }
 
   version(): string {
@@ -70,10 +68,9 @@ export class FileIOR2 implements FileIO {
   }
 
   getThumbnailUrl(tim: string, ext?: string, maxWidth?: number, maxHeight?: number): string {
+    // 使用 Cloudflare Image Resizing（免費 URL 轉換方式）
+    // 格式：/cdn-cgi/image/width=250,height=250,quality=75,format=auto,fit=cover/img/tim.ext
     const originalUrl = this.getImageUrl(tim, ext || '');
-    
-    // Cloudflare Image Resizing URL 格式（免費）
-    // /cdn-cgi/image/{options}/{original_url}
     const width = maxWidth || 250;
     const height = maxHeight || 250;
     const options = `width=${width},height=${height},quality=75,format=auto,fit=cover`;
