@@ -23,21 +23,34 @@ export class FileIOImageResizing implements FileIO {
     // 無需初始化
   }
 
-  async saveImage(image: File, filename: string, tim: string): Promise<ImageInfo> {
+  async saveImage(image: File | Uint8Array, filename: string, tim: string): Promise<ImageInfo> {
     const ext = '.' + filename.split('.').pop();
     const key = `${tim}${ext}`;
 
-    await this.r2.put(key, image);
+    let file: File;
+    let md5: string;
 
-    const md5 = await this.calculateMD5(image);
-    const arrayBuffer = await image.arrayBuffer();
+    if (image instanceof Uint8Array) {
+      // Uint8Array: 轉換為 File
+      const buffer = (image.buffer as ArrayBuffer).slice(image.byteOffset, image.byteOffset + image.byteLength);
+      file = new File([buffer], filename, { type: 'image/jpeg' });
+      md5 = await this.calculateMD5(image);
+    } else {
+      // File: 直接使用
+      file = image;
+      md5 = await this.calculateMD5(image);
+    }
+
+    await this.r2.put(key, file);
+
+    const arrayBuffer = await file.arrayBuffer();
     const dimensions = await this.getImageDimensions(arrayBuffer);
 
     return {
       originalName: filename,
       extension: ext,
-      mimeType: image.type,
-      size: image.size,
+      mimeType: file.type,
+      size: file.size,
       md5,
       width: dimensions.width,
       height: dimensions.height,
@@ -55,8 +68,8 @@ export class FileIOImageResizing implements FileIO {
   }
 
   /**
-   * 使用 Cloudflare Image Resizing API 生成縮圖
-   * @param tim 原始圖片的 tim
+   * 取得縮圖 URL
+   * @param tim 時間戳
    * @param ext 原始圖片的副檔名
    * @param maxWidth 最大寬度
    * @param maxHeight 最大高度
@@ -65,14 +78,18 @@ export class FileIOImageResizing implements FileIO {
    */
   getThumbnailUrl(
     tim: string,
-    ext: string,
-    maxWidth: number = 250,
-    maxHeight: number = 250,
-    quality: number = 75
+    ext?: string,
+    maxWidth?: number,
+    maxHeight?: number,
+    quality?: number
   ): string {
     // Cloudflare Image Resizing URL 格式
     // /cdn-cgi/image/width=250,height=250,quality=75,format=auto/img/tim.ext
-    return `${this.baseUrl}/cdn-cgi/image/width=${maxWidth},height=${maxHeight},quality=${quality},format=auto/img/${tim}${ext}`;
+    const width = maxWidth || 250;
+    const height = maxHeight || 250;
+    const qual = quality || 75;
+    const extension = ext || '.jpg';
+    return `${this.baseUrl}/cdn-cgi/image/width=${width},height=${height},quality=${qual},format=auto/img/${tim}${extension}`;
   }
 
   /**
@@ -89,9 +106,9 @@ export class FileIOImageResizing implements FileIO {
   /**
    * 刪除圖片
    */
-  async deleteImage(key: string): Promise<boolean> {
+  async deleteImage(tim: string, ext?: string): Promise<void> {
+    const key = ext ? `img/${tim}${ext}` : `img/${tim}`;
     await this.r2.delete(key);
-    return true;
   }
 
   /**
@@ -106,7 +123,7 @@ export class FileIOImageResizing implements FileIO {
       bytes = data;
     }
 
-    const hashBuffer = await crypto.subtle.digest('MD5', bytes);
+    const hashBuffer = await crypto.subtle.digest('MD5', bytes.buffer as ArrayBuffer);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   }
@@ -183,7 +200,72 @@ export class FileIOImageResizing implements FileIO {
   /**
    * 不需要實作 - Cloudflare 會自動處理
    */
-  async resizeImage(buffer: ArrayBuffer, maxWidth: number, maxHeight: number): Promise<Blob> {
+  async resizeImage(buffer: ArrayBuffer, maxWidth: number, maxHeight: number, quality?: number): Promise<Blob> {
     throw new Error('Use Cloudflare Image Resizing URL instead');
+  }
+
+  /**
+   * 取得圖片 URL
+   */
+  getImageUrl(tim: string, ext?: string): string {
+    const extension = ext || '.jpg';
+    return `${this.baseUrl}/img/${tim}${extension}`;
+  }
+
+  /**
+   * 檢查圖片是否存在
+   */
+  async exists(tim: string, ext?: string): Promise<boolean> {
+    const key = ext ? `img/${tim}${ext}` : `img/${tim}`;
+    const object = await this.r2.head(key);
+    return object !== null;
+  }
+
+  /**
+   * 取得檔案資訊
+   */
+  async getFileInfo(key: string): Promise<{ size: number; uploaded: Date } | null> {
+    const object = await this.r2.head(key);
+    if (!object) return null;
+    return {
+      size: object.size || 0,
+      uploaded: object.uploaded || new Date(),
+    };
+  }
+
+  /**
+   * 取得總大小
+   */
+  async getTotalSize(): Promise<number> {
+    let total = 0;
+    let cursor: string | undefined = undefined;
+
+    do {
+      const listed = await this.r2.list({ cursor, limit: 1000 });
+      for (const object of listed.objects) {
+        total += object.size || 0;
+      }
+      cursor = (listed as any).cursor;
+    } while (cursor);
+
+    return total;
+  }
+
+  /**
+   * 清理未使用的檔案
+   */
+  async cleanup(usedFiles: Set<string>): Promise<string[]> {
+    const deleted: string[] = [];
+    const listed = await this.r2.list();
+
+    for (const object of listed.objects) {
+      const key = object.key;
+      if (key && !usedFiles.has(key)) {
+        await this.r2.delete(key);
+        deleted.push(key);
+      }
+    }
+
+    return deleted;
   }
 }

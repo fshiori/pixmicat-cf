@@ -11,6 +11,9 @@ import { AntiSpamSystem } from './lib/anti-spam';
 import { getHoneypotNames, validateHoneypot, getDefaultFieldTrapNames } from './lib/field-trap';
 import type { Env } from './types';
 
+// Import type augmentation for Cloudflare Workers
+import './types-augmentation';
+
 // 建立路由器
 const router = Router();
 
@@ -1013,12 +1016,12 @@ router.get('/res/:no.htm', async (request, env: Env) => {
         ${post.tim && post.ext ? `
           <div class="post-image">
             <a href="/img/${post.tim}${post.ext}" target="_blank">
-              <img src="/thumb/${post.tim}s.jpg" alt="${htmlEscape(post.filename)}">
+              <img src="/thumb/${post.tim}s.jpg" alt="${htmlEscape(post.filename || '')}">
             </a>
             <div class="file-info">
-              ${htmlEscape(post.filename)}<br>
-              ${showImgWH ? `${post.w}x${post.h}<br>` : ''}
-              ${post.filesize} bytes
+              ${htmlEscape(post.filename || '')}<br>
+              ${showImgWH ? `${post.w || 0}x${post.h || 0}<br>` : ''}
+              ${post.filesize || 0} bytes
             </div>
           </div>
         ` : ''}
@@ -2858,7 +2861,7 @@ router.post('/admin/api/toggle-locked', async (request, env: Env) => {
 router.post('/admin/api/maintenance', async (request, env: Env) => {
   try {
     const admin = new AdminSystem(env);
-    if (!(await admin.isAuthenticated(request))) {
+    if (!(await admin.isAdminRequest(request))) {
       return new Response(
         JSON.stringify({ success: false, error: '未授權' }),
         {
@@ -3053,8 +3056,8 @@ router.get('/admin/status', async (request, env: Env) => {
         <tbody>
           ${categoryStats.results?.map(stat => `
             <tr>
-              <td>${htmlEscape(stat.category)}</td>
-              <td>${stat.count}</td>
+              <td>${htmlEscape((stat as any).category || '')}</td>
+              <td>${(stat as any).count || 0}</td>
             </tr>
           `).join('') || '<tr><td colspan="2">尚無分類數據</td></tr>'}
         </tbody>
@@ -3076,23 +3079,30 @@ router.get('/admin/status', async (request, env: Env) => {
         </thead>
         <tbody>
           ${latestPosts.results?.map(post => {
-            const date = new Date(post.time * 1000);
+            const postTime = (post as any).time || 0;
+            const postSub = (post as any).sub;
+            const postName = (post as any).name;
+            const postCategory = (post as any).category;
+            const postNo = (post as any).no;
+            const postSticky = (post as any).sticky;
+            const postLocked = (post as any).locked;
+
+            const date = new Date(postTime * 1000);
             const timeStr = date.toISOString().replace('T', ' ').substring(0, 19);
             return `
               <tr>
-                <td>${post.no}</td>
-                <td>${post.sub ? htmlEscape(post.sub) : '(無標題)'}</td>
-                <td>${htmlEscape(post.name)}</td>
-                <td>${post.category || '-'}</td>
+                <td>${postNo}</td>
+                <td>${postSub ? htmlEscape(postSub) : '(無標題)'}</td>
+                <td>${htmlEscape(postName)}</td>
+                <td>${postCategory || '-'}</td>
                 <td>${timeStr}</td>
                 <td>
-                  ${post.sticky ? '📌 置頂' : ''}
-                  ${post.locked ? '🔒 鎖定' : ''}
-                  ${!post.sticky && !post.locked ? '正常' : ''}
+                  ${postSticky ? '📌 置頂' : ''}
+                  ${postLocked ? '🔒 鎖定' : ''}
                 </td>
               </tr>
             `;
-          }).join('') || '<tr><td colspan="6">尚無文章</td></tr>'}
+          }).join('') || '<tr><td colspan="6">尚無文章數據</td></tr>'}
         </tbody>
       </table>
     </div>

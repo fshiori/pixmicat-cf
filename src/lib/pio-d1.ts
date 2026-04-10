@@ -52,9 +52,9 @@ export class PIOD1 implements PIO {
 
     try {
       if (action === 'vacuum') {
-        await this.db.run('VACUUM');
+        await this.db.prepare('VACUUM').all();
       } else if (action === 'analyze') {
-        await this.db.run('ANALYZE');
+        await this.db.prepare('ANALYZE').all();
       }
       return true;
     } catch (error) {
