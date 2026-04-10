@@ -2,24 +2,33 @@
  * 測試類型定義
  */
 
+import type { Mock } from 'vitest';
+
 // 模擬環境變數
 export interface MockEnv {
   DB: {
-    prepare: ReturnType<typeof vi.fn>;
-    batch: ReturnType<typeof vi.fn>;
-    exec: ReturnType<typeof vi.fn>;
+    prepare: Mock;
+    batch: Mock;
+    exec: Mock;
   };
   STORAGE: {
-    get: ReturnType<typeof vi.fn>;
-    put: ReturnType<typeof vi.fn>;
-    delete: ReturnType<typeof vi.fn>;
-    list: ReturnType<typeof vi.fn>;
+    get: Mock;
+    put: Mock;
+    delete: Mock;
+    list: Mock;
   };
   KV: {
-    get: ReturnType<typeof vi.fn>;
-    put: ReturnType<typeof vi.fn>;
-    delete: ReturnType<typeof vi.fn>;
+    get: Mock;
+    put: Mock;
+    delete: Mock;
   };
+  ADMIN_PASSWORD?: string;
+  ADMIN_PASSWORD_HASH?: string;
+  ADMIN_CAP_ENABLED?: string;
+  ADMIN_CAP_NAME?: string;
+  ADMIN_CAP_PASSWORD?: string;
+  ADMIN_CAP_SUFFIX?: string;
+  ADMIN_CAP_ALLOW_HTML?: string;
 }
 
 // 模擬請求

@@ -171,14 +171,8 @@ describe('AdminSystem', () => {
       const password = 'test123456';
       const hash = await admin.hashPassword(password);
 
-      // 模擬從資料庫取得 hash
-      mockEnv.DB.prepare = vi.fn(() => ({
-        bind: vi.fn(() => ({
-          first: vi.fn(() => Promise.resolve({
-            password_hash: hash,
-          })),
-        })),
-      }));
+      // 設置環境變數以確保 getStoredAdminHash() 能正常工作
+      mockEnv.ADMIN_PASSWORD = password;
 
       const result = await admin.login(password);
       expect(result.success).toBe(true);
@@ -217,26 +211,12 @@ describe('AdminSystem', () => {
 
   describe('verifyCap', () => {
     it('應該識別管理員 Cap', async () => {
-      // 設定預設管理員 Cap
-      const prepareMock = vi.fn();
-
-      mockEnv.DB.prepare = vi.fn((query: string) => {
-        const mockBind = vi.fn((param: string) => {
-          let value = null;
-
-          if (query.includes('cap_enable')) value = '1';
-          else if (query.includes('cap_name')) value = 'admin';
-          else if (query.includes('cap_password')) value = 'secret';
-          else if (query.includes('cap_suffix')) value = ' ★';
-          else if (query.includes('cap_allow_html')) value = '1';
-
-          return {
-            first: vi.fn(() => Promise.resolve(value ? { value } : null)),
-          };
-        });
-
-        return { bind: mockBind };
-      });
+      // 設置環境變數以啟用 Cap 功能
+      mockEnv.ADMIN_CAP_ENABLED = 'true';
+      mockEnv.ADMIN_CAP_NAME = 'admin';
+      mockEnv.ADMIN_CAP_PASSWORD = 'secret';
+      mockEnv.ADMIN_CAP_SUFFIX = ' ★';
+      mockEnv.ADMIN_CAP_ALLOW_HTML = 'true';
 
       const result = await admin.verifyCap('admin', 'admin@example.com');
       expect(result.isAdmin).toBe(true);
