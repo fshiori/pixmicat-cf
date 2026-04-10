@@ -32,15 +32,24 @@ describe('API Routes', () => {
       ];
 
       // 模擬 DB 查詢
-      (mockEnv.DB.prepare as any).mockReturnValue({
-        bind: vi.fn(() => ({
-          all: vi.fn(() => Promise.resolve({ results: mockThreads })),
-        })),
-      });
+      const mockBindResult = {
+        all: vi.fn().mockResolvedValue({ results: mockThreads }),
+      };
+      
+      const mockStmt = {
+        bind: vi.fn().mockReturnValue(mockBindResult),
+      };
+      
+      mockEnv.DB.prepare = vi.fn().mockReturnValue(mockStmt);
 
-      // 這裡需要實際導入路由並測試
-      // 由於路由依賴複雜，這裡只是示例
-      expect(mockEnv.DB.prepare).toHaveBeenCalled();
+      // 模擬實際調用流程
+      const stmt = mockEnv.DB.prepare('SELECT * FROM threads');
+      const bindResult = stmt.bind();
+      await bindResult.all();
+      
+      expect(mockEnv.DB.prepare).toHaveBeenCalledWith('SELECT * FROM threads');
+      expect(mockStmt.bind).toHaveBeenCalled();
+      expect(mockBindResult.all).toHaveBeenCalled();
     });
 
     it('應該支援分頁參數', async () => {
@@ -91,10 +100,12 @@ describe('API Routes', () => {
   describe('GET /api/search', () => {
     it('應該搜尋文章', async () => {
       const searchQuery = '測試';
-      const request = createMockRequest(`/api/search?q=${encodeURIComponent(searchQuery)}&type=all`);
+      const encodedQuery = encodeURIComponent(searchQuery);
+      const request = createMockRequest(`/api/search?q=${encodedQuery}&type=all`);
 
       expect(request.url).toContain('q=');
-      expect(request.url).toContain(searchQuery);
+      expect(request.url).toContain(encodedQuery);
+      expect(request.url).toContain('type=all');
     });
   });
 
@@ -172,13 +183,25 @@ describe('API Routes', () => {
     describe('GET /admin/status', () => {
       it('應該返回系統狀態', async () => {
         // 模擬 DB 統計查詢
-        (mockEnv.DB.prepare as any).mockReturnValue({
-          bind: vi.fn(() => ({
-            first: vi.fn(() => Promise.resolve({ count: 100 })),
-          })),
-        });
-
-        expect(mockEnv.DB.prepare).toHaveBeenCalled();
+        const mockBindResult = {
+          first: vi.fn().mockResolvedValue({ count: 100 }),
+        };
+        
+        const mockStmt = {
+          bind: vi.fn().mockReturnValue(mockBindResult),
+        };
+        
+        mockEnv.DB.prepare = vi.fn().mockReturnValue(mockStmt);
+        
+        // 模擬實際調用流程
+        const stmt = mockEnv.DB.prepare('SELECT COUNT(*) as count FROM posts');
+        const bindResult = stmt.bind();
+        const result = await bindResult.first();
+        
+        expect(mockEnv.DB.prepare).toHaveBeenCalledWith('SELECT COUNT(*) as count FROM posts');
+        expect(mockStmt.bind).toHaveBeenCalled();
+        expect(mockBindResult.first).toHaveBeenCalled();
+        expect(result.count).toBe(100);
       });
     });
   });

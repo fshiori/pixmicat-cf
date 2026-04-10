@@ -123,6 +123,31 @@ export class AdminSystem {
   }
 
   /**
+   * 驗證密碼（別名）
+   */
+  async verifyPassword(password: string): Promise<boolean> {
+    return this.verifyAdminPassword(password);
+  }
+
+  /**
+   * 管理員登入
+   */
+  async login(password: string): Promise<{ token: string; username: string } | null> {
+    const isValid = await this.verifyPassword(password);
+    if (!isValid) {
+      return null;
+    }
+
+    const token = await this.generateSessionToken();
+    await this.createSession(token);
+    
+    return {
+      token,
+      username: 'admin',
+    };
+  }
+
+  /**
    * 雜湊密碼
    */
   async hashPassword(password: string): Promise<string> {
@@ -184,30 +209,65 @@ export class AdminSystem {
   /**
    * 建立管理員 Session
    */
-  async createSession(token: string, expiresIn: number = 3600): Promise<void> {
-    await this.env.KV.put(`admin:session:${token}`, 'active', {
+  async createSession(token: string, expiresIn: number = 3600): Promise<{ username: string; token: string }> {
+    const sessionData = JSON.stringify({ username: 'admin', createdAt: Date.now() });
+    await this.env.KV.put(`admin:session:${token}`, sessionData, {
       expirationTtl: expiresIn,
     });
+    
+    return {
+      username: 'admin',
+      token,
+    };
   }
 
   /**
    * 刪除管理員 Session
    */
   async deleteSession(token: string): Promise<void> {
-    await this.env.KV.delete(`admin:session:${token}`);
+    await this.env.KV.delete(`admin_session:${token}`);
+  }
+
+  /**
+   * 取得管理員 Session
+   */
+  async getSession(token: string): Promise<{ username: string } | null> {
+    const stored = await this.env.KV.get(`admin:session:${token}`);
+    if (!stored) {
+      return null;
+    }
+    
+    try {
+      const session = JSON.parse(stored);
+      return session;
+    } catch {
+      return null;
+    }
   }
 
   /**
    * 檢查是否為管理員請求
    */
   async isAdminRequest(request: Request): Promise<boolean> {
+    // 嘗試從 Cookie 獲取
     const cookie = request.headers.get('Cookie') || '';
-    const match = cookie.match(/admin_session=([^;]+)/);
-    if (!match) {
-      return false;
+    const cookieMatch = cookie.match(/admin_session=([^;]+)/);
+    if (cookieMatch) {
+      const token = cookieMatch[1];
+      return await this.verifySessionToken(token);
     }
 
-    const token = match[1];
-    return await this.verifySessionToken(token);
+    // 嘗試從 Authorization header 獲取
+    const auth = request.headers.get('Authorization');
+    if (auth) {
+      // Format: Bearer <token>
+      const bearerMatch = auth.match(/^Bearer\s+(.+)$/);
+      if (bearerMatch) {
+        const token = bearerMatch[1];
+        return await this.verifySessionToken(token);
+      }
+    }
+
+    return false;
   }
 }
