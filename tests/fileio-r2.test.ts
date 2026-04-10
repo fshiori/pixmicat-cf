@@ -50,9 +50,10 @@ describe('FileIOR2 - saveThumbnail', () => {
 
   it('should generate correct thumbnail URL', () => {
     const tim = '1234567890';
-    const url = fileio.getThumbnailUrl(tim);
+    const ext = '.jpg';
+    const url = fileio.getThumbnailUrl(tim, ext);
 
-    expect(url).toBe(`/thumb/${tim}s.jpg`);
+    expect(url).toBe('/cdn-cgi/image/width=250,height=250,quality=75,format=auto,fit=cover/img/1234567890.jpg');
   });
 
   it('should use original image in local environment when resize needed', async () => {
@@ -74,7 +75,7 @@ describe('FileIOR2 - saveThumbnail', () => {
     expect(mockR2.put).not.toHaveBeenCalled(); // 不應該嘗試使用 CF Image Resizing
   });
 
-  it('should attempt CF Image Resizing in production environment', async () => {
+  it('should not attempt CF Image Resizing in production environment (using URL transformation)', async () => {
     // 創建生產環境的 fileio
     const prodEnv = {
       ENVIRONMENT: 'production',
@@ -91,16 +92,15 @@ describe('FileIOR2 - saveThumbnail', () => {
       height: 1080,
     });
 
-    // Mock fetch 成功
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      blob: async () => new Blob(['resized']),
-    } as any);
-
     const largeImage = new ArrayBuffer(1000);
-    await prodFileio.resizeImage(largeImage, 250, 250);
+    const result = await prodFileio.resizeImage(largeImage, 250, 250);
 
-    // 應該嘗試使用 CF Image Resizing
-    expect(mockR2.put).toHaveBeenCalled();
+    // 現在使用 URL 轉換方式，不需要預處理
+    expect(result).toBeInstanceOf(Blob);
+    expect(mockR2.put).not.toHaveBeenCalled(); // 不應該再調用 put
+    
+    // 檢查 getThumbnailUrl 返回 CF Image Resizing URL
+    const thumbUrl = prodFileio.getThumbnailUrl('123', '.jpg', 250, 250);
+    expect(thumbUrl).toContain('/cdn-cgi/image/');
   });
 });

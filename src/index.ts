@@ -424,13 +424,14 @@ router.post('/api/post', async (request, env: Env) => {
       const thumbMaxWidth = parseInt(await getConfigValue(env, 'thumb_max_width', '250'));
       const thumbMaxHeight = parseInt(await getConfigValue(env, 'thumb_max_height', '250'));
 
+      // 使用 Cloudflare Image Resizing URL 轉換（免費）
+      // 不需要預生成縮圖，縮圖會在請求時自動生成
       if (imageData.width > thumbMaxWidth || imageData.height > thumbMaxHeight) {
-        const thumbnail = await fileio.resizeImage(fileBuffer, thumbMaxWidth, thumbMaxHeight);
-        await fileio.saveThumbnail(thumbnail, tim);
+        console.info(`Large image detected (${imageData.width}x${imageData.height}), thumbnail will be generated on-demand`);
       } else {
-        // 使用原圖作為縮圖
-        await fileio.saveThumbnail(reusedFile, tim);
+        console.info(`Image size within thumbnail bounds (${imageData.width}x${imageData.height}), using original for thumbnail`);
       }
+      // 縮圖 URL 會由 getThumbnailUrl(tim, ext, thumbMaxWidth, thumbMaxHeight) 自動生成
     }
 
     // 檢查是否為 sage（不推文）
@@ -1025,7 +1026,7 @@ router.get('/res/:no.htm', async (request, env: Env) => {
         ${post.tim && post.ext ? `
           <div class="post-image">
             <a href="/img/${post.tim}${post.ext}" target="_blank">
-              <img src="/thumb/${post.tim}s.jpg" alt="${htmlEscape(post.filename || '')}">
+              <img src="/cdn-cgi/image/width=250,height=250,quality=75,format=auto,fit=cover/img/${post.tim}${post.ext}" alt="${htmlEscape(post.filename || '')}">
             </a>
             <div class="file-info">
               ${htmlEscape(post.filename || '')}<br>

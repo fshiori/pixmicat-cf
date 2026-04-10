@@ -69,8 +69,16 @@ export class FileIOR2 implements FileIO {
     return `/img/${tim}${ext}`;
   }
 
-  getThumbnailUrl(tim: string): string {
-    return `/thumb/${tim}s.jpg`;
+  getThumbnailUrl(tim: string, ext?: string, maxWidth?: number, maxHeight?: number): string {
+    const originalUrl = this.getImageUrl(tim, ext || '');
+    
+    // Cloudflare Image Resizing URL 格式（免費）
+    // /cdn-cgi/image/{options}/{original_url}
+    const width = maxWidth || 250;
+    const height = maxHeight || 250;
+    const options = `width=${width},height=${height},quality=75,format=auto,fit=cover`;
+    
+    return `/cdn-cgi/image/${options}${originalUrl}`;
   }
 
   async exists(tim: string, ext: string): Promise<boolean> {
@@ -153,57 +161,10 @@ export class FileIOR2 implements FileIO {
       return new Blob([image], { type: 'image/jpeg' });
     }
 
-    // 檢查是否啟用 CF Image Resizing（僅在生產環境）
-    const enableCFResizing = this.env.ENVIRONMENT === 'production';
-
-    if (!enableCFResizing) {
-      // 本地開發環境：直接返回原圖，由前端 CSS 處理縮放
-      console.warn('Image resizing skipped in local environment, using original image');
-      return new Blob([image], { type: 'image/jpeg' });
-    }
-
-    // 生產環境：使用 Cloudflare Image Resizing
-    try {
-      // 先將圖片存為臨時文件
-      const tempKey = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const tempBlob = new Blob([image]);
-
-      // 暫時存儲到 R2
-      await this.r2.put(tempKey, tempBlob);
-
-      // 構建 R2 公開 URL
-      const imageUrl = `https://r2.${this.env.CLOUDFLARE_ACCOUNT_ID || ''}.r2.cloudflarestorage.com/${tempKey}`;
-
-      // 使用 Cloudflare Image Resizing API
-      // 注意：需要在 Worker 綁定中啟用 Image Resizing
-      const response = await fetch(imageUrl, {
-        cf: {
-          image: {
-            width: maxWidth,
-            height: maxHeight,
-            quality: Math.round(quality * 100),
-            format: 'jpeg',
-            fit: 'cover'
-          }
-        }
-      } as any);
-
-      if (!response.ok) {
-        throw new Error(`Image resize failed: ${response.status}`);
-      }
-
-      const resizedImage = await response.blob();
-
-      // 清理臨時文件
-      await this.r2.delete(tempKey);
-
-      return resizedImage;
-    } catch (error) {
-      console.error('Cloudflare Image Resizing failed, falling back to original:', error);
-
-      // Fallback: 返回原始圖片
-      return new Blob([image], { type: 'image/jpeg' });
-    }
+    // 使用 Cloudflare Image Resizing URL 轉換（免費）
+    // 不需要預處理圖片，縮圖會在請求時自動生成
+    console.info('Thumbnail will be generated on-demand via CF Image Resizing URL');
+    return new Blob([image], { type: 'image/jpeg' });
   }
 
   async getImageDimensions(image: ArrayBuffer): Promise<{ width: number; height: number }> {
