@@ -80,8 +80,13 @@ export class FileIOR2 implements FileIO {
     };
   }
 
-  async calculateMD5(file: File): Promise<string> {
-    const arrayBuffer = await file.arrayBuffer();
+  async calculateMD5(file: File | Uint8Array): Promise<string> {
+    let arrayBuffer: ArrayBuffer;
+    if (file instanceof Uint8Array) {
+      arrayBuffer = file.buffer as ArrayBuffer;
+    } else {
+      arrayBuffer = await file.arrayBuffer();
+    }
     const hashBuffer = await crypto.subtle.digest('MD5', arrayBuffer);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
@@ -159,7 +164,7 @@ export class FileIOR2 implements FileIO {
 
       // 構建 CF Images Resizing URL
       // 格式: /cdn-cgi/image/{options}/{source}
-      const resizeOptions = `width=${maxWidth},height=${maxHeight},quality=${Math.round(quality * 100)},format=jpeg,fit=inside`;
+      const resizeOptions = `width=${maxWidth},height=${maxHeight},quality=${Math.round(quality * 100)},format=jpeg,fit=cover`;
 
       // 使用 Cloudflare Workers Image Resizing API
       const imageUrl = `http://localhost:8787/${tempKey}`;
@@ -171,7 +176,7 @@ export class FileIOR2 implements FileIO {
             height: maxHeight,
             quality: Math.round(quality * 100),
             format: 'jpeg',
-            fit: 'inside'
+            fit: 'cover'
           }
         }
       });
@@ -251,13 +256,13 @@ export class FileIOR2 implements FileIO {
     }
 
     // 處理分頁
-    let cursor = listed.cursor;
+    let cursor = (listed as any).cursor;
     while (cursor) {
       const page = await this.r2.list({ cursor });
       for (const object of page.objects) {
         total += object.size;
       }
-      cursor = page.cursor;
+      cursor = (page as any).cursor;
     }
 
     return total;
@@ -278,7 +283,7 @@ export class FileIOR2 implements FileIO {
     }
 
     // 處理分頁
-    let cursor = listed.cursor;
+    let cursor = (listed as any).cursor;
     while (cursor) {
       const page = await this.r2.list({ cursor });
       for (const object of page.objects) {
@@ -289,7 +294,7 @@ export class FileIOR2 implements FileIO {
           deleted.push(key);
         }
       }
-      cursor = page.cursor;
+      cursor = (page as any).cursor;
     }
 
     return deleted;

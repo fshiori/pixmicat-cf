@@ -287,7 +287,7 @@ export class AntiSpamSystem {
         return false;
       }
 
-      const data = await response.json();
+      const data = await response.json() as { Answer?: string[] };
 
       // 如果有回答，表示在黑名單中
       return !!(data.Answer && data.Answer.length > 0);

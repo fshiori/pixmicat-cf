@@ -87,12 +87,12 @@ export interface ImageInfo {
 export interface FileIO {
   version(): string;
   init(): Promise<void>;
-  saveImage(image: File, filename: string, tim: string): Promise<ImageInfo>;
+  saveImage(image: File | Uint8Array, filename: string, tim: string): Promise<ImageInfo>;
   saveThumbnail(thumbnail: Blob, tim: string): Promise<void>;
-  deleteImage(tim: string, ext: string): Promise<void>;
-  getImageUrl(tim: string, ext: string): string;
-  getThumbnailUrl(tim: string): string;
-  exists(tim: string, ext: string): Promise<boolean>;
+  deleteImage(tim: string, ext?: string): Promise<void>;
+  getImageUrl(tim: string, ext?: string): string;
+  getThumbnailUrl(tim: string, ext?: string, maxWidth?: number, maxHeight?: number, quality?: number): string;
+  exists(tim: string, ext?: string): Promise<boolean>;
   getFileInfo(key: string): Promise<{ size: number; uploaded: Date } | null>;
   calculateMD5(file: File | Uint8Array): Promise<string>;
   validateImage(file: File): Promise<boolean>;
@@ -108,4 +108,13 @@ export interface Env {
   KV: KVNamespace;
   DEFAULT_LANGUAGE?: string;
   TIME_ZONE?: string;
+  // Admin CAPTCHA settings
+  ADMIN_CAP_ENABLED?: string;
+  ADMIN_CAP_NAME?: string;
+  ADMIN_CAP_PASSWORD?: string;
+  ADMIN_CAP_SUFFIX?: string;
+  ADMIN_CAP_ALLOW_HTML?: string;
+  // Admin password
+  ADMIN_PASSWORD?: string;
+  ADMIN_PASSWORD_HASH?: string;
 }
