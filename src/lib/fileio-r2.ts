@@ -151,50 +151,10 @@ export class FileIOR2 implements FileIO {
       return new Blob([image], { type: 'image/jpeg' });
     }
 
-    try {
-      // 使用 Cloudflare Image Resizing
-      // 先將圖片存為臨時文件
-      const tempKey = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const tempBlob = new Blob([image]);
-
-      // 暫時存儲到 R2
-      await this.r2.put(tempKey, tempBlob);
-
-      // 構建 CF Images Resizing URL
-      // 格式: /cdn-cgi/image/{options}/{source}
-      const resizeOptions = `width=${maxWidth},height=${maxHeight},quality=${Math.round(quality * 100)},format=jpeg,fit=cover`;
-
-      // 使用 Cloudflare Workers Image Resizing API
-      const imageUrl = `http://localhost:8787/${tempKey}`;
-
-      const response = await fetch(imageUrl, {
-        cf: {
-          image: {
-            width: maxWidth,
-            height: maxHeight,
-            quality: Math.round(quality * 100),
-            format: 'jpeg',
-            fit: 'cover'
-          }
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Image resize failed: ${response.status}`);
-      }
-
-      const resizedImage = await response.blob();
-
-      // 清理臨時文件
-      await this.r2.delete(tempKey);
-
-      return resizedImage;
-    } catch (error) {
-      console.error('Cloudflare Image Resizing failed, falling back to original:', error);
-
-      // Fallback: 返回原始圖片
-      return new Blob([image], { type: 'image/jpeg' });
-    }
+    // 本地開發環境無法使用 CF Image Resizing
+    // 直接返回原圖，由前端 CSS 處理縮放
+    console.warn('Image resizing skipped in local environment, using original image');
+    return new Blob([image], { type: 'image/jpeg' });
   }
 
   async getImageDimensions(image: ArrayBuffer): Promise<{ width: number; height: number }> {

@@ -99,20 +99,29 @@ router.post('/api/post', async (request, env: Env) => {
     await fileio.init();
 
     // Honeypot 驗證：檢查蜜罐欄位是否被修改
-    const hpName = formData.get('hp_name')?.toString() || '';
-    const hpEmail = formData.get('hp_email')?.toString() || '';
-    const hpSub = formData.get('hp_sub')?.toString() || '';
-    const hpCom = formData.get('hp_com')?.toString() || '';
-    const hpReply = formData.get('hp_reply')?.toString() || '';
+    const honeypotNames = getHoneypotNames();
+    const hpName = formData.get(honeypotNames.name)?.toString() || '';
+    const hpEmail = formData.get(honeypotNames.email)?.toString() || '';
+    const hpSub = formData.get(honeypotNames.subject)?.toString() || '';
+    const hpCom = formData.get(honeypotNames.comment)?.toString() || '';
+    const hpReply = formData.get(honeypotNames.reply)?.toString() || '';
 
     // 如果蜜罐欄位被修改，判定為 spam bot
-    if (hpName !== 'spammer' ||
-        hpEmail !== 'foo@foo.bar' ||
-        hpSub !== 'DO NOT FIX THIS' ||
-        hpCom !== 'EID OG SMAPS' ||
-        hpReply !== '') {
+    const errors = [];
+    if (hpName !== 'spammer') errors.push(`name: expected 'spammer', got '${hpName}'`);
+    if (hpEmail !== 'foo@foo.bar') errors.push(`email: expected 'foo@foo.bar', got '${hpEmail}'`);
+    if (hpSub !== 'DO NOT FIX THIS') errors.push(`sub: expected 'DO NOT FIX THIS', got '${hpSub}'`);
+    if (hpCom !== 'EID OG SMAPS') errors.push(`com: expected 'EID OG SMAPS', got '${hpCom}'`);
+    if (hpReply !== '') errors.push(`reply: expected '', got '${hpReply}'`);
+    
+    if (errors.length > 0) {
+      console.error('Honeypot validation failed:', errors.join('; '));
       return new Response(
-        JSON.stringify({ success: false, error: '偵測到自動發文程式，請停止此行為' }),
+        JSON.stringify({ 
+          success: false, 
+          error: '偵測到自動發文程式，請停止此行為',
+          debug: errors.join('; ')
+        }),
         {
           status: 403,
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
@@ -3609,7 +3618,7 @@ async function getHomePage(env: Env, page: number = 1, request?: Request): Promi
           </tr>
         </table>
       </form>
-      ${additionInfo ? `<div style="text-align: center; margin: 10px 0; color: #800000;">${htmlEscape(additionInfo)}</div>` : ''}
+      ${additionInfo ? `<div style="text-align: center; margin: 10px 0; color: #800000;">${additionInfo}</div>` : ''}
     </div>
 
     <!-- 警告提示系統 -->
@@ -3709,6 +3718,13 @@ async function getHomePage(env: Env, page: number = 1, request?: Request): Promi
     const postForm = document.querySelector('form[action="/api/post"]');
     if (postForm) {
       postForm.addEventListener('submit', function(e) {
+        // 保護 honeypot 欄位，確保它們不被修改
+        const honeypotFields = postForm.querySelectorAll('.hp-hide');
+        honeypotFields.forEach(field => {
+          // 防止 JavaScript 意外修改
+          field.setAttribute('data-protected', 'true');
+        });
+
         const password = document.getElementById('password').value;
         const name = document.getElementById('name').value;
         const email = document.getElementById('email').value;
@@ -3732,10 +3748,13 @@ async function getHomePage(env: Env, page: number = 1, request?: Request): Promi
           .then(result => {
             if (result.success) {
               alert('發文成功！');
-              this.reset();
+              // 手動重置，不影響 honeypot 欄位
               document.getElementById('name').value = getCookie('pixmicat_name') || '無名氏';
               document.getElementById('email').value = getCookie('pixmicat_email') || '';
               document.getElementById('password').value = getCookie('pixmicat_password') || '';
+              document.getElementById('sub').value = '';
+              document.getElementById('com').value = '';
+              document.getElementById('file').value = '';
               loadThreads();
             } else {
               alert('發文失敗：' + result.error);
