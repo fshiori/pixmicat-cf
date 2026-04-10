@@ -1916,6 +1916,14 @@ router.get('/admin/settings', async (request, env: Env) => {
     .form-group { margin-bottom: 15px; }
     .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
     .modal-actions { text-align: right; margin-top: 20px; }
+    .warning-banner { background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 15px; margin-bottom: 20px; }
+    .warning-banner h3 { color: #856404; margin-bottom: 10px; font-size: 16px; }
+    .warning-banner p { color: #856404; margin: 5px 0; font-size: 14px; }
+    .warning-banner code { background: #f8f9fa; padding: 2px 6px; border-radius: 3px; font-family: monospace; }
+    .info-banner { background: #d1ecf1; border: 1px solid #17a2b8; border-radius: 4px; padding: 15px; margin-bottom: 20px; }
+    .info-banner h3 { color: #0c5460; margin-bottom: 10px; font-size: 16px; }
+    .info-banner p { color: #0c5460; margin: 5px 0; font-size: 14px; }
+    .info-banner a { color: #0c5460; text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -1924,12 +1932,27 @@ router.get('/admin/settings', async (request, env: Env) => {
   </div>
 
   <div class="container">
+    <div class="warning-banner">
+      <h3>⚠️ 安全警告：trust_http_x_forwarded_for</h3>
+      <p>如果您的網站直接部署在 Cloudflare 上，請勿啟用此設定！</p>
+      <p>啟用此設定可能導致 <strong>IP 欺騙風險</strong>，使反垃圾系統失效。</p>
+      <p>詳見：<a href="/docs/config-keys-reference#trust_http_x_forwarded_for" target="_blank">配置鍵參考文檔</a></p>
+    </div>
+
+    <div class="info-banner">
+      <h3>💡 提示：Canonical Key 遷移</h3>
+      <p>部分舊鍵名已被棄用（如 <code>show_imgwh</code> → <code>show_image_dimensions</code>），但仍可使用。</p>
+      <p>建議使用新的 canonical key 以保持一致性。</p>
+      <p>詳見：<a href="/docs/config-keys-reference" target="_blank">配置鍵參考文檔</a></p>
+    </div>
+
     <div class="toolbar">
       <a href="/admin/dashboard" class="btn">← 返回儀表板</a>
       <button class="btn btn-primary" onclick="showAddModal()">+ 新增設定</button>
       <button class="btn" onclick="performMaintenance('optimize')">🔧 優化資料庫</button>
       <button class="btn" onclick="performMaintenance('check')">✅ 檢查資料庫</button>
       <button class="btn" onclick="performMaintenance('repair')">🔨 修復資料庫</button>
+      <a href="/docs/config-keys-reference" class="btn" target="_blank">📖 配置文檔</a>
     </div>
 
     <table>
@@ -2240,6 +2263,179 @@ router.delete('/admin/api/config/:key', async (request, env: Env) => {
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
       }
     );
+  }
+});
+
+// 文檔路由：配置鍵參考
+router.get('/docs/config-keys-reference', async (request, env: Env) => {
+  const admin = new AdminSystem(env);
+  const isAdmin = await admin.isAdminRequest(request);
+
+  if (!isAdmin) {
+    return Response.redirect(new URL('/admin', request.url), 302);
+  }
+
+  // 讀取文檔檔案
+  try {
+    const markdown = `
+# 配置鍵參考文檔
+
+本文檔已移至專案根目錄的 \`CONFIG_KEYS_REFERENCE.md\`。
+
+請查看該檔案以獲得完整的配置鍵說明、預設值和安全考量。
+
+## 重要安全警告
+
+### ⚠️ trust_http_x_forwarded_for
+
+如果您的網站直接部署在 Cloudflare 上，**請勿啟用此設定**！
+
+啟用此設定可能導致 **IP 欺騙風險**，使反垃圾系統失效。
+
+### 何時不應啟用（絕大多數情況）
+- 如果你的網站直接部署在 Cloudflare 上
+- 如果前面沒有其他可信的 Reverse Proxy
+- **啟用會導致 IP 權騙風險**
+
+### 何時可以啟用（極少數情況）
+- 你有 Cloudflare Enterprise + IP Firewall
+- 你有其他可信的 Reverse Proxy（如 Cloudflare Access）
+- 你完全理解安全風險
+
+## Canonical Key 遷移
+
+部分舊鍵名已被棄用，但仍可使用。建議遷移到新的 canonical key：
+
+| 舊鍵名 | Canonical Key | 狀態 |
+|--------|---------------|------|
+| \`show_imgwh\` | \`show_image_dimensions\` | 棄用 |
+| \`use_float_form\` | \`use_floating_form\` | 棄用 |
+| \`addition_info\` | \`form_notice\` | 棄用 |
+| \`max_res\` | \`auto_bump_limit\` | 棄用 |
+| \`bump_limit\` | \`auto_bump_limit\` | 棄用 |
+| \`trust_proxy_headers\` | \`trust_http_x_forwarded_for\` | 棄用 |
+
+---
+
+如需完整文檔，請查看 \`CONFIG_KEYS_REFERENCE.md\` 檔案。
+`;
+
+    const html = `<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>配置鍵參考文檔 - Pixmicat!-CF</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; background: #f5f5f5; }
+    .header { background: #800000; color: white; padding: 20px; }
+    .header h1 { margin: 0; }
+    .container { max-width: 900px; margin: 20px auto; padding: 0 20px; }
+    .toolbar { margin-bottom: 20px; }
+    .btn { background: #800000; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; margin-right: 10px; }
+    .btn:hover { background: #a00000; }
+    .content { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .content h1 { color: #800000; margin-bottom: 20px; }
+    .content h2 { color: #333; margin-top: 30px; margin-bottom: 15px; }
+    .content h3 { color: #555; margin-top: 20px; margin-bottom: 10px; }
+    .content p { margin-bottom: 15px; line-height: 1.6; }
+    .content code { background: #f8f9fa; padding: 2px 6px; border-radius: 3px; font-family: monospace; }
+    .content pre { background: #f8f9fa; padding: 15px; border-radius: 5px; overflow-x: auto; }
+    .content table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    .content th, .content td { padding: 12px; border: 1px solid #ddd; text-align: left; }
+    .content th { background: #f8f9fa; font-weight: bold; }
+    .warning-banner { background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 15px; margin-bottom: 20px; }
+    .warning-banner h3 { color: #856404; margin-bottom: 10px; }
+    .warning-banner p { color: #856404; margin: 5px 0; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>📖 配置鍵參考文檔</h1>
+  </div>
+
+  <div class="container">
+    <div class="toolbar">
+      <a href="/admin/settings" class="btn">← 返回設定頁面</a>
+      <a href="/admin/dashboard" class="btn">返回儀表板</a>
+    </div>
+
+    <div class="warning-banner">
+      <h3>⚠️ 重要安全警告</h3>
+      <p><strong>trust_http_x_forwarded_for</strong>：如果您的網站直接部署在 Cloudflare 上，請勿啟用此設定！</p>
+      <p>啟用此設定可能導致 <strong>IP 欺騙風險</strong>，使反垃圾系統失效。</p>
+    </div>
+
+    <div class="content">
+      <h1>配置鍵參考文檔</h1>
+      <p>本文檔已移至專案根目錄的 <code>CONFIG_KEYS_REFERENCE.md</code>。</p>
+      <p>請查看該檔案以獲得完整的配置鍵說明、預設值和安全考量。</p>
+
+      <h2>Canonical Key 遷移</h2>
+      <p>部分舊鍵名已被棄用，但仍可使用。建議遷移到新的 canonical key：</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>舊鍵名</th>
+            <th>Canonical Key</th>
+            <th>狀態</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>show_imgwh</code></td>
+            <td><code>show_image_dimensions</code></td>
+            <td>棄用</td>
+          </tr>
+          <tr>
+            <td><code>use_float_form</code></td>
+            <td><code>use_floating_form</code></td>
+            <td>棄用</td>
+          </tr>
+          <tr>
+            <td><code>addition_info</code></td>
+            <td><code>form_notice</code></td>
+            <td>棄用</td>
+          </tr>
+          <tr>
+            <td><code>max_res</code></td>
+            <td><code>auto_bump_limit</code></td>
+            <td>棄用</td>
+          </tr>
+          <tr>
+            <td><code>bump_limit</code></td>
+            <td><code>auto_bump_limit</code></td>
+            <td>棄用</td>
+          </tr>
+          <tr>
+            <td><code>trust_proxy_headers</code></td>
+            <td><code>trust_http_x_forwarded_for</code></td>
+            <td>棄用</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>快速連結</h2>
+      <ul>
+        <li><a href="/admin/settings" target="_blank">系統設定</a></li>
+        <li><a href="/admin/dashboard" target="_blank">管理儀表板</a></li>
+        <li><a href="/" target="_blank">返回首頁</a></li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    return new Response(html, {
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    });
+  } catch (error: any) {
+    return new Response(`錯誤：${error.message}`, {
+      status: 500,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    });
   }
 });
 
