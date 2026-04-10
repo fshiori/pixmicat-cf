@@ -93,7 +93,7 @@ router.post('/api/post', async (request, env: Env) => {
   try {
     const formData = await request.formData();
     const pio = new PIOD1(env.DB);
-    const fileio = new FileIOR2(env.STORAGE);
+    const fileio = new FileIOR2(env.STORAGE, env);
 
     await pio.prepare();
     await fileio.init();
@@ -566,7 +566,7 @@ router.post('/api/delete', async (request, env: Env) => {
   try {
     const formData = await request.formData();
     const pio = new PIOD1(env.DB);
-    const fileio = new FileIOR2(env.STORAGE);
+    const fileio = new FileIOR2(env.STORAGE, env);
 
     await pio.prepare();
 
@@ -1849,7 +1849,7 @@ router.post('/admin/api/delete', async (request, env: Env) => {
     }
 
     const pio = new PIOD1(env.DB);
-    const fileio = new FileIOR2(env.STORAGE);
+    const fileio = new FileIOR2(env.STORAGE, env);
 
     await pio.prepare();
 

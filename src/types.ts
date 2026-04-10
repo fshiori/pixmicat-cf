@@ -108,6 +108,8 @@ export interface Env {
   KV: KVNamespace;
   DEFAULT_LANGUAGE?: string;
   TIME_ZONE?: string;
+  ENVIRONMENT?: string;
+  CLOUDFLARE_ACCOUNT_ID?: string;
   // Admin CAPTCHA settings
   ADMIN_CAP_ENABLED?: string;
   ADMIN_CAP_NAME?: string;
