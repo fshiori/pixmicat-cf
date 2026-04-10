@@ -42,7 +42,7 @@ export class AntiSpamSystem {
       ]),
       dnsblWhitelist: await this.getStringArrayConfig('dnsbl_whitelist', []),
       banPatterns: await this.getStringArrayConfig('ban_patterns', []),
-      trustProxyHeaders: (await this.getEnvValue('trust_proxy_headers', '0')) === '1',
+      trustProxyHeaders: (await this.getEnvValue('trust_http_x_forwarded_for', '0')) === '1',
     };
   }
 
@@ -101,8 +101,8 @@ export class AntiSpamSystem {
    * 檢查 IP 是否被封鎖
    */
   async checkIPBan(request: Request): Promise<SpamCheckResult> {
-    const ip = this.getClientIP(request);
     const config = await this.getConfig();
+    const ip = this.getClientIP(request, config.trustProxyHeaders);
 
     // 1. 檢查資料庫中的明確 IP 封鎖
     const result = await this.env.DB.prepare(
@@ -143,7 +143,10 @@ export class AntiSpamSystem {
 
         let regex: RegExp;
 
-        if (pattern.includes('/')) {
+        if (pattern.startsWith('/') && pattern.endsWith('/')) {
+          // 正規表達式
+          regex = new RegExp(pattern.slice(1, -1));
+        } else if (pattern.includes('/')) {
           // CIDR 表示法（簡化版：只支援 /8, /16, /24）
           const [base, mask] = pattern.split('/');
           const maskBits = parseInt(mask);
@@ -166,9 +169,6 @@ export class AntiSpamSystem {
             .replace(/\./g, '\\.')
             .replace(/\*/g, '.*');
           regex = new RegExp(`^${regexPattern}$`);
-        } else if (pattern.startsWith('/') && pattern.endsWith('/')) {
-          // 正規表達式
-          regex = new RegExp(pattern.slice(1, -1));
         } else {
           // 精確匹配
           if (ip === pattern) {
@@ -242,7 +242,7 @@ export class AntiSpamSystem {
    * 檢查 DNSBL（DNS Black List）
    */
   async checkDNSBL(request: Request, config: AntiSpamConfig): Promise<SpamCheckResult> {
-    const ip = this.getClientIP(request);
+    const ip = this.getClientIP(request, config.trustProxyHeaders);
 
     // 檢查白名單
     if (config.dnsblWhitelist.includes(ip)) {
@@ -300,31 +300,37 @@ export class AntiSpamSystem {
   /**
    * 取得客戶端 IP
    */
-  getClientIP(request: Request): string {
-    // 嘗試從多種 Header 中取得真實 IP
+  getClientIP(request: Request, trustProxyHeaders: boolean = false): string {
     const headers = (request as any).headers;
 
-    // 代理 Header 列表（依優先順序）
-    const proxyHeaders = [
-      'CF-Connecting-IP', // Cloudflare
-      'X-Real-IP',
-      'X-Forwarded-For',
-      'X-Client-IP',
-      'X-Forwarded',
-      'Forwarded-For',
-      'Forwarded',
-    ];
+    // Cloudflare 官方 header 永遠優先且可信任
+    const cfIP = headers.get('CF-Connecting-IP');
+    if (cfIP) {
+      return cfIP.split(',')[0].trim();
+    }
 
-    for (const header of proxyHeaders) {
-      const value = headers.get(header);
-      if (value) {
-        // X-Forwarded-For 可能包含多個 IP，取第一個
-        const ips = value.split(',').map(ip => ip.trim());
-        return ips[0];
+    // 只有啟用 TRUST_HTTP_X_FORWARDED_FOR 時才信任代理 header
+    if (trustProxyHeaders) {
+      const proxyHeaders = [
+        'X-Real-IP',
+        'X-Forwarded-For',
+        'X-Client-IP',
+        'X-Forwarded',
+        'Forwarded-For',
+        'Forwarded',
+      ];
+
+      for (const header of proxyHeaders) {
+        const value = headers.get(header);
+        if (value) {
+          const ips = value.split(',').map((ip: string) => ip.trim()).filter(Boolean);
+          if (ips.length > 0) {
+            return ips[0];
+          }
+        }
       }
     }
 
-    // 如果沒有代理 Header，回傳預設值
     return '127.0.0.1';
   }
 
@@ -332,15 +338,33 @@ export class AntiSpamSystem {
    * 輔助：取得環境變數值
    */
   private async getEnvValue(key: string, defaultValue: string): Promise<string> {
+    const aliases: Record<string, string[]> = {
+      trust_http_x_forwarded_for: ['trust_proxy_headers'],
+      show_image_dimensions: ['show_imgwh'],
+      use_floating_form: ['use_float_form'],
+      form_notice: ['addition_info'],
+      auto_bump_limit: ['max_res', 'bump_limit'],
+    };
+
+    const keysToTry = [key, ...(aliases[key] || [])];
+
     try {
-      const cached = await this.env.KV.get(`config:${key}`);
-      if (cached) return cached;
+      for (const k of keysToTry) {
+        const cached = await this.env.KV.get(`config:${k}`);
+        if (cached !== null) return cached;
+      }
 
-      const result = await this.env.DB.prepare('SELECT value FROM configs WHERE key = ?')
-        .bind(key)
-        .first();
+      for (const k of keysToTry) {
+        const result = await this.env.DB.prepare('SELECT value FROM configs WHERE key = ?')
+          .bind(k)
+          .first<{ value: string }>();
 
-      return (result as any)?.value || defaultValue;
+        if (result?.value !== undefined) {
+          return result.value;
+        }
+      }
+
+      return defaultValue;
     } catch {
       return defaultValue;
     }
