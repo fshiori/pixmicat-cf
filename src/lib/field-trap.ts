@@ -62,16 +62,20 @@ export function getDefaultFieldTrapNames(): FieldTrapConfig {
  * 這些是吸引 spam bot 的陷阱欄位
  */
 export interface HoneypotConfig {
-  name1: string;
-  name2: string;
-  name3: string;
+  name: string;
+  email: string;
+  subject: string;
+  comment: string;
+  reply: string;
 }
 
 export function getHoneypotNames(): HoneypotConfig {
   return {
-    name1: 'hp_website',
-    name2: 'hp_url',
-    name3: 'hp_company',
+    name: 'hp_website',
+    email: 'hp_url',
+    subject: 'hp_company',
+    comment: 'hp_comment',
+    reply: 'hp_reply',
   };
 }
 

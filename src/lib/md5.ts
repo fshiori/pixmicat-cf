@@ -18,8 +18,10 @@ export async function calculateMD5(data: File | Uint8Array | ArrayBuffer): Promi
     const arrayBuffer = await data.arrayBuffer();
     spark.append(arrayBuffer);
   } else if (data instanceof Uint8Array) {
-    // 從 Uint8Array 計算
-    spark.append(data.buffer);
+    // 從 Uint8Array 計算 - 複製到新的 ArrayBuffer
+    const arrayBuffer = new ArrayBuffer(data.byteLength);
+    new Uint8Array(arrayBuffer).set(data);
+    spark.append(arrayBuffer);
   } else {
     // 從 ArrayBuffer 計算
     spark.append(data);
