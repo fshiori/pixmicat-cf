@@ -83,16 +83,56 @@ export function getHoneypotNames(): HoneypotConfig {
  * 驗證 honeypot 欄位是否為空
  * 如果任何 honeypot 欄位有值，則可能是 spam bot
  */
-export function validateHoneypot(formData: FormData): boolean {
-  const honeypotNames = getHoneypotNames();
+export function validateHoneypot(formData: FormData | Record<string, any>, honeypotConfig?: HoneypotConfig): { valid: boolean; errors: string[] } {
+  const honeypotNames = honeypotConfig || getHoneypotNames();
+  const errors: string[] = [];
 
-  for (const key of Object.values(honeypotNames)) {
-    const value = formData.get(key);
-    if (value !== null && value !== '' && value !== 'false') {
+  for (const [key, name] of Object.entries(honeypotNames)) {
+    let value: any;
+    
+    if (formData instanceof FormData) {
+      value = formData.get(name);
+    } else {
+      value = formData[name];
+    }
+    
+    if (value !== null && value !== undefined && value !== '' && value !== 'false') {
       // honeypot 欄位被填寫了，可能是 bot
-      return false;
+      errors.push(`Honeypot field ${key} was filled: ${name}`);
     }
   }
 
-  return true;
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
+}
+
+/**
+ * 驗證欄位陷阱
+ * 檢查表單是否使用了正確的隨機欄位名稱
+ */
+export function verifyFieldTrap(formData: FormData | Record<string, any>, fieldConfig: FieldTrapConfig): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+  
+  // 檢查是否使用了舊的固定欄位名稱
+  const oldFieldNames = ['name', 'email', 'subject', 'comment'];
+  for (const oldName of oldFieldNames) {
+    let hasOldField = false;
+    
+    if (formData instanceof FormData) {
+      hasOldField = formData.has(oldName) && formData.get(oldName) !== '';
+    } else {
+      hasOldField = oldName in formData && formData[oldName] !== '';
+    }
+    
+    if (hasOldField) {
+      errors.push(`Detected old field name: ${oldName}`);
+    }
+  }
+  
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
 }
