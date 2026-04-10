@@ -2,7 +2,7 @@
  * E2E 測試 - 管理功能
  */
 
-import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { AdminSystem } from '../src/lib/admin';
 import { AntiSpamSystem } from '../src/lib/anti-spam';
 import type { MockEnv } from './types';
@@ -39,38 +39,40 @@ describe('E2E - 管理功能', () => {
         list: vi.fn(() => Promise.resolve({ objects: [] })),
       },
       KV: {
-        get: vi.fn((key: string) => {
+        get: (function(key: string) {
+          console.log('KV get called with key:', key, 'type:', typeof key);
           // 直接返回配置值
-          switch (key) {
-            case 'config:admin_password_hash':
-              return Promise.resolve(adminHash);
-            case 'config:ban_check':
-              return Promise.resolve('1');
-            case 'config:bad_strings':
-              return Promise.resolve('["viagra","casino","porn"]');
-            case 'config:bad_filemd5':
-              return Promise.resolve('["abc123","def456"]');
-            case 'config:enable_dnsbl':
-              return Promise.resolve('1');
-            case 'config:dnsbl_servers':
-              return Promise.resolve('["sbl-xbl.spamhaus.org","bl.spamcop.net"]');
-            case 'config:dnsbl_whitelist':
-              return Promise.resolve('["127.0.0.1","192.168.1.100"]');
-            case 'config:ban_patterns':
-              return Promise.resolve('["192.168.0.0/16","10.*.*.*"]');
-            case 'config:admin_cap':
-              return Promise.resolve('admin');
-            case 'config:tripcode_salt':
-              return Promise.resolve('pixmicat-tripcode');
-            case 'admin_session:valid_token':
-              return Promise.resolve(JSON.stringify({
-                username: 'admin',
-                loginTime: Date.now(),
-              }));
-            default:
-              return Promise.resolve(null);
+          if (key === 'config:admin_password_hash') {
+            return Promise.resolve(adminHash);
+          } else if (key === 'config:ban_check') {
+            console.log('Returning ban_check = 1');
+            return Promise.resolve('1');
+          } else if (key === 'config:bad_strings') {
+            return Promise.resolve(JSON.stringify(['viagra','casino','porn']));
+          } else if (key === 'config:bad_filemd5') {
+            return Promise.resolve(JSON.stringify(['abc123','def456']));
+          } else if (key === 'config:enable_dnsbl') {
+            return Promise.resolve('1');
+          } else if (key === 'config:dnsbl_servers') {
+            return Promise.resolve(JSON.stringify(['sbl-xbl.spamhaus.org','bl.spamcop.net']));
+          } else if (key === 'config:dnsbl_whitelist') {
+            return Promise.resolve(JSON.stringify(['127.0.0.1','192.168.1.100']));
+          } else if (key === 'config:ban_patterns') {
+            return Promise.resolve(JSON.stringify(['192.168.0.0/16','10.*.*.*']));
+          } else if (key === 'config:admin_cap') {
+            return Promise.resolve('admin');
+          } else if (key === 'config:tripcode_salt') {
+            return Promise.resolve('pixmicat-tripcode');
+          } else if (key === 'admin_session:valid_token') {
+            return Promise.resolve(JSON.stringify({
+              username: 'admin',
+              loginTime: Date.now(),
+            }));
+          } else {
+            console.log('No match, returning null for key:', key);
+            return Promise.resolve(null);
           }
-        }),
+        }) as any,
         put: vi.fn(() => Promise.resolve()),
         delete: vi.fn(() => Promise.resolve()),
       },
@@ -249,14 +251,30 @@ describe('E2E - 管理功能', () => {
   });
 
   describe('反垃圾設定管理', () => {
+    beforeEach(() => {
+      // 設定反垃圾測試的 KV mock
+      const originalGet = mockEnv.KV.get;
+      mockEnv.KV.get = vi.fn((key: string) => {
+        if (key === 'config:ban_check') {
+          return Promise.resolve('1');
+        } else if (key === 'config:bad_strings') {
+          return Promise.resolve(JSON.stringify(['viagra','casino','porn']));
+        } else if (key === 'config:bad_filemd5') {
+          return Promise.resolve(JSON.stringify(['abc123','def456']));
+        } else if (key === 'config:ban_patterns') {
+          return Promise.resolve(JSON.stringify(['192.168.0.0/16','10.*.*.*']));
+        } else if (key === 'config:enable_dnsbl') {
+          return Promise.resolve('0');  // 禁用 DNSBL 測試
+        }
+        return Promise.resolve(null);
+      }) as any;
+    });
+
     it('應該正確讀取反垃圾配置', async () => {
-      // 調試：檢查 KV 是否被正確調用
-      console.log('mockEnv.KV.get function:', typeof mockEnv.KV.get);
-      const banCheckValue = await mockEnv.KV.get('config:ban_check');
-      console.log('ban_check value from KV:', banCheckValue);
 
       const config = await antiSpam.getConfig();
       console.log('Config from getConfig():', config);
+      console.log('banCheck value:', config.banCheck, 'type:', typeof config.banCheck);
 
       expect(config.banCheck).toBe(true);
       expect(config.badStrings).toEqual(['viagra', 'casino', 'porn']);
