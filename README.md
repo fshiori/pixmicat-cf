@@ -203,8 +203,10 @@ GET /api/search?q=關鍵字&type=all&page=1
 - [x] Spam 防護機制
 - [x] RSS 輸出
 - [x] API 文件
-- [ ] 單元測試
+- [x] 單元測試（133 個測試通過）
 - [x] 分頁功能（首頁）
+- [x] 分類瀏覽
+- [x] 本地縮圖生成（sharp）
 
 ## 貢獻
 
@@ -226,9 +228,18 @@ GET /api/search?q=關鍵字&type=all&page=1
 
 ## 授權
 
-Artistic License 2.0
+MIT License
 
 ## 原始專案
 
-- Pixmicat!: http://pixmicat.openfoundry.org/
+本專案是 Pixmicat! 圖版系統的 Cloudflare Workers 移植版本。
+
+- **Pixmicat!**: https://github.com/pixmicat/pixmicat
 - 參考版本: pixmicat-8th.Release.4
+
+## 相關文檔
+
+- [API 文檔](docs/API.md)
+- [配置鍵參考](docs/CONFIG_KEYS_REFERENCE.md)
+- [本地開發設定](LOCAL_DEVELOPMENT_SETUP.md)
+- [貢獻指南](CONTRIBUTING.md)
