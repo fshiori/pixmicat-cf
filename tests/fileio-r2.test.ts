@@ -48,12 +48,13 @@ describe('FileIOR2 - saveThumbnail', () => {
     );
   });
 
-  it('should generate correct thumbnail URL', () => {
+  it('should generate correct thumbnail URL (returns original image URL)', () => {
     const tim = '1234567890';
     const ext = '.jpg';
     const url = fileio.getThumbnailUrl(tim, ext);
 
-    expect(url).toBe('/cdn-cgi/image/width=250,height=250,quality=75,format=auto,fit=cover/img/1234567890.jpg');
+    // 現在返回原圖 URL（待實作實際縮圖生成）
+    expect(url).toBe('/img/1234567890.jpg');
   });
 
   it('should use original image in local environment when resize needed', async () => {
@@ -88,13 +89,13 @@ describe('FileIOR2 - saveThumbnail', () => {
     const largeImage = new ArrayBuffer(1000);
     const result = await prodFileio.resizeImage(largeImage, 250, 250);
 
-    // 現在使用 URL 轉換方式，不需要預處理
+    // 現在使用原圖 URL（待實作實際縮圖生成）
     expect(result).toBeInstanceOf(Blob);
     expect(mockR2.put).not.toHaveBeenCalled(); // 不應該再調用 put
     
-    // 檢查 getThumbnailUrl 返回 CF Image Resizing URL
+    // 檢查 getThumbnailUrl 返回原圖 URL
     const thumbUrl = prodFileio.getThumbnailUrl('123', '.jpg', 250, 250);
-    expect(thumbUrl).toContain('/cdn-cgi/image/');
+    expect(thumbUrl).toBe('/img/123.jpg'); // 返回原圖 URL，不是 CF Image Resizing URL
   });
 
   it('應該刪除圖片', async () => {

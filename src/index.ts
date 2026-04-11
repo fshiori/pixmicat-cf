@@ -874,13 +874,50 @@ router.get('/thumb/:filename', async (request, env: Env) => {
   const isLocalDev = request.url.includes('localhost') || request.url.includes('127.0.0.1');
 
   if (!isLocalDev) {
-    // 生產環境：使用 Cloudflare Image Resizing
-    const url = new URL(request.url);
-    const originalExt = object.key?.split('.').pop() || 'jpg';
-    const cfImageUrl = `${url.protocol}//${url.host}/cdn-cgi/image/width=250,height=250,quality=75,format=auto,fit=cover/img/${tim}.${originalExt}`;
+    // 生產環境：使用內建縮圖生成（imagescript - pure JavaScript）
+    try {
+      const { generateWorkerThumbnail, isImageSmallerThan } = await import('./lib/image-worker.js');
+      const originalImage = await object.arrayBuffer();
 
-    // 返回 307 重定向到 Cloudflare Image Resizing URL
-    return Response.redirect(cfImageUrl, 307);
+      // 如果圖片已經很小，直接返回原圖
+      const isSmall = await isImageSmallerThan(originalImage, 250, 250);
+      if (isSmall) {
+        return new Response(originalImage, {
+          headers: {
+            'Content-Type': object.httpMetadata?.contentType || 'image/jpeg',
+            'Cache-Control': 'public, max-age=31536000',
+            'X-Thumbnail-Source': 'original',
+          },
+        });
+      }
+
+      // 生成縮圖（250x250, JPEG, quality 75）
+      const thumbnailBuffer = await generateWorkerThumbnail(originalImage, {
+        width: 250,
+        height: 250,
+        quality: 75
+      });
+
+      const headers = new Headers();
+      headers.set('Content-Type', 'image/jpeg');
+      headers.set('Content-Length', thumbnailBuffer.byteLength.toString());
+      headers.set('Cache-Control', 'public, max-age=31536000');
+      headers.set('X-Thumbnail-Source', 'worker-imagescript');
+
+      return new Response(thumbnailBuffer, { headers });
+    } catch (error) {
+      // 如果縮圖生成失敗，回退到原圖
+      console.error('Worker thumbnail generation failed, falling back to original image:', error);
+
+      const data = await object.arrayBuffer();
+      return new Response(data, {
+        headers: {
+          'Content-Type': object.httpMetadata?.contentType || 'image/jpeg',
+          'Cache-Control': 'public, max-age=31536000',
+          'X-Thumbnail-Error': 'generation-failed',
+        },
+      });
+    }
   }
 
   // 本地開發環境：使用 sharp 生成縮圖
