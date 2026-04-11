@@ -781,7 +781,9 @@ router.get('/api/category/:name', async (request, env: Env) => {
 // RSS 輸出
 router.get('/rss.xml', async (request, env: Env) => {
   const pio = new PIOD1(env.DB);
+  const fileio = new FileIOR2(env.STORAGE);
   await pio.prepare();
+  await fileio.init();
 
   const url = new URL(request.url);
   const limit = parseInt(url.searchParams.get('limit') || '50');
@@ -797,7 +799,7 @@ router.get('/rss.xml', async (request, env: Env) => {
   }
 
   // 生成 RSS XML
-  const rss = await generateRSS(env, threads);
+  const rss = await generateRSS(fileio, env, threads);
 
   return new Response(rss, {
     headers: {
@@ -961,7 +963,9 @@ router.get('/thumb/:filename', async (request, env: Env) => {
 // 單一討論串頁面
 router.get('/res/:no.htm', async (request, env: Env) => {
   const pio = new PIOD1(env.DB);
+  const fileio = new FileIOR2(env.STORAGE);
   await pio.prepare();
+  await fileio.init();
 
   const no = parseInt(request.params.no.replace('.htm', '') || '0');
   const url = new URL(request.url);
@@ -1064,8 +1068,8 @@ router.get('/res/:no.htm', async (request, env: Env) => {
 
         ${post.tim && post.ext ? `
           <div class="post-image">
-            <a href="/img/${post.tim}${post.ext}" target="_blank">
-              <img src="/thumb/${post.tim}s.jpg" alt="${htmlEscape(post.filename || '')}">
+            <a href="${fileio.getImageUrl(post.tim, post.ext)}" target="_blank">
+              <img src="${fileio.getThumbnailUrl(post.tim, post.ext)}" alt="${htmlEscape(post.filename || '')}">
             </a>
             <div class="file-info">
               ${htmlEscape(post.filename || '')}<br>
@@ -4414,7 +4418,7 @@ function htmlEscape(text: string): string {
  * @param threads 討論串列表
  * @returns RSS XML 字串
  */
-async function generateRSS(env: Env, threads: any[]): Promise<string> {
+async function generateRSS(fileio: FileIOR2, env: Env, threads: any[]): Promise<string> {
   // 取得基本設定
   const siteName = await getConfigValue(env, 'site_name', 'Pixmicat!');
   const baseUrl = await getConfigValue(env, 'base_url', 'https://pixmicat.example.com');
@@ -4447,7 +4451,7 @@ async function generateRSS(env: Env, threads: any[]): Promise<string> {
     // 建立內容描述
     let content = '';
     if (hasImage) {
-      content += `<img src="${baseUrl}/img/${post.tim}${post.ext}" alt="${htmlEscape(post.filename)}" /><br/>`;
+      content += `<img src="${fileio.getImageUrl(post.tim, post.ext)}" alt="${htmlEscape(post.filename)}" /><br/>`;
       content += `<p>檔案: ${htmlEscape(post.filename)} (${post.w}x${post.h})</p>`;
     }
     content += `<p>${htmlEscape(description)}</p>`;

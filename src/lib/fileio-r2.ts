@@ -64,13 +64,19 @@ export class FileIOR2 implements FileIO {
   }
 
   getImageUrl(tim: string, ext: string): string {
-    return `/img/${tim}${ext}`;
+    // 使用 R2 公開域名
+    return `https://r2.pixmicat.dcard.dev/${tim}${ext}`;
   }
 
   getThumbnailUrl(tim: string, ext?: string, maxWidth?: number, maxHeight?: number): string {
-    // 暫時返回原圖 URL，用 CSS 控制顯示尺寸
-    // TODO: 實作實際縮圖生成（需要找到 Cloudflare Workers 相容的圖片處理庫）
-    return this.getImageUrl(tim, ext || '.jpg');
+    // 使用 Cloudflare Image Resizing
+    const originalUrl = this.getImageUrl(tim, ext || '.jpg');
+    const width = maxWidth || 250;
+    const height = maxHeight || 250;
+    const quality = 75;
+    
+    // Cloudflare Image Resizing URL 格式
+    return `https://r2.pixmicat.dcard.dev/cdn-cgi/image/width=${width},height=${height},quality=${quality},format=auto,fit=cover/${tim}${ext || '.jpg'}`;
   }
 
   async exists(tim: string, ext: string): Promise<boolean> {
