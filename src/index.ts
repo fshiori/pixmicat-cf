@@ -841,7 +841,9 @@ router.get('/img/:filename', async (request, env: Env) => {
   const headers = new Headers();
   headers.set('Content-Type', object.httpMetadata?.contentType || 'application/octet-stream');
   headers.set('Content-Length', object.size.toString());
-  headers.set('etag', object.httpEtag);
+  if (object.httpEtag) {
+    headers.set('etag', object.httpEtag);
+  }
   headers.set('Cache-Control', 'public, max-age=31536000');
 
   // 使用 arrayBuffer 來確保正確讀取數據
