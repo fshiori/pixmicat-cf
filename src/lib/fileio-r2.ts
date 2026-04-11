@@ -68,14 +68,9 @@ export class FileIOR2 implements FileIO {
   }
 
   getThumbnailUrl(tim: string, ext?: string, maxWidth?: number, maxHeight?: number): string {
-    // 使用 Cloudflare Image Resizing（免費 URL 轉換方式）
-    // 格式：/cdn-cgi/image/width=250,height=250,quality=75,format=auto,fit=cover/img/tim.ext
-    const originalUrl = this.getImageUrl(tim, ext || '');
-    const width = maxWidth || 250;
-    const height = maxHeight || 250;
-    const options = `width=${width},height=${height},quality=75,format=auto,fit=cover`;
-    
-    return `/cdn-cgi/image/${options}${originalUrl}`;
+    // 暫時返回原圖 URL，用 CSS 控制顯示尺寸
+    // TODO: 實作實際縮圖生成（需要找到 Cloudflare Workers 相容的圖片處理庫）
+    return this.getImageUrl(tim, ext || '.jpg');
   }
 
   async exists(tim: string, ext: string): Promise<boolean> {
@@ -151,16 +146,44 @@ export class FileIOR2 implements FileIO {
     maxHeight: number,
     quality: number = 0.75
   ): Promise<Blob> {
-    const dimensions = await this.getImageDimensions(image);
-
-    // 如果圖片已經小於目標尺寸，直接返回
-    if (dimensions.width <= maxWidth && dimensions.height <= maxHeight) {
+    const { isImageSmallerThan } = await import('./image-worker.js');
+    
+    // 檢查是否需要縮圖
+    const isSmall = await isImageSmallerThan(image as ArrayBuffer, maxWidth, maxHeight);
+    
+    if (isSmall) {
+      console.info(`Image already smaller than ${maxWidth}x${maxHeight}, returning original`);
       return new Blob([image], { type: 'image/jpeg' });
     }
 
-    // 使用 Cloudflare Image Resizing URL 轉換（免費）
-    // 不需要預處理圖片，縮圖會在請求時自動生成
-    console.info('Thumbnail will be generated on-demand via CF Image Resizing URL');
+    // 生產環境暫時返回原圖（待 Cloudflare Image Resizing 啟用）
+    // 或實作實際縮圖生成（需要與 Cloudflare Workers 相容的圖片處理庫）
+    console.warn('Thumbnail generation in production not yet implemented, returning original image');
+    return new Blob([image], { type: 'image/jpeg' });
+  }
+
+  async generateThumbnail(
+    image: Uint8Array,
+    maxWidth: number,
+    maxHeight: number,
+    quality: number = 0.75
+  ): Promise<Blob> {
+    const { isImageSmallerThan } = await import('./image-worker.js');
+    
+    // 檢查是否需要縮圖
+    const imageBuffer = new Uint8Array(image).buffer as ArrayBuffer;
+    const isSmall = await isImageSmallerThan(imageBuffer, maxWidth, maxHeight);
+    
+    if (isSmall) {
+      console.info(`Image already smaller than ${maxWidth}x${maxHeight}, returning original`);
+      // @ts-ignore - TypeScript type system limitation with ArrayBufferLike
+      return new Blob([image], { type: 'image/jpeg' });
+    }
+
+    // 生產環境暫時返回原圖（待 Cloudflare Image Resizing 啟用）
+    // 或實作實際縮圖生成（需要與 Cloudflare Workers 相容的圖片處理庫）
+    console.warn('Thumbnail generation in production not yet implemented, returning original image');
+    // @ts-ignore - TypeScript type system limitation with ArrayBufferLike
     return new Blob([image], { type: 'image/jpeg' });
   }
 
