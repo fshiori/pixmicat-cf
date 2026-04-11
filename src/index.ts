@@ -4004,6 +4004,18 @@ async function getHomePage(env: Env, page: number = 1, request?: Request): Promi
       }
       ` : ''}
 
+    // 生成圖片 URL 的輔助函數（客戶端）
+    function getImageUrl(tim, ext) {
+      return 'https://r2.pixmicat.dcard.dev/' + tim + ext;
+    }
+
+    function getThumbnailUrl(tim, ext, maxWidth, maxHeight) {
+      const width = maxWidth || 250;
+      const height = maxHeight || 250;
+      const quality = 75;
+      return 'https://r2.pixmicat.dcard.dev/cdn-cgi/image/width=' + width + ',height=' + height + ',quality=' + quality + ',format=auto,fit=cover/' + tim + ext;
+    }
+
     function renderThread(thread) {
       const op = thread.posts[0];
       let html = '<div class="thread">';
@@ -4038,7 +4050,9 @@ async function getHomePage(env: Env, page: number = 1, request?: Request): Promi
       if (post.tim && post.ext) {
         html += '<div class="post-image">';
         html += '<a href="/img/' + post.tim + post.ext + '" target="_blank">';
-        html += '<img src="/thumb/' + post.tim + 's.jpg" alt="">';
+        // 使用 Cloudflare Image Resizing
+        const thumbnailUrl = getThumbnailUrl(post.tim, post.ext, 250, 250);
+        html += '<img src="' + thumbnailUrl + '" alt="">';
         html += '</a>';
         html += '<div class="file-info">' + escapeHtml(post.filename || '');
         if (post.w && post.h) { html += ' (' + post.w + 'x' + post.h + ')'; }
