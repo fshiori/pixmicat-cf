@@ -563,19 +563,11 @@ router.post('/api/post', async (request, env: Env) => {
       redirectTarget = resto > 0 ? `/res/${resto}.htm` : '/';
     }
 
-    // 清除首頁 KV 快取
-    try {
-      // 清除所有頁面的快取（因為新文章可能影響多頁）
-      const threadsPerPage = parseInt(await getConfigValue(env, 'threads_per_page', '15'));
-      const maxPages = 10; // 清除前 10 頁的快取
-      
-      for (let i = 1; i <= maxPages; i++) {
-        await env.KV.delete(`homepage:${i}`);
-      }
-      console.info('Cleared homepage cache after new post');
-    } catch (error) {
-      console.error('Failed to clear homepage cache:', error);
-    }
+    // 異步清除首頁 KV 快取（不阻塞響應）
+    // 不使用 await，讓它在背景執行
+    env.KV.delete('homepage:1').catch((err: Error) => 
+      console.error('Failed to clear homepage cache:', err)
+    );
 
     return new Response(
       JSON.stringify({ 
