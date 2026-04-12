@@ -27,13 +27,39 @@ const corsHeaders = {
 // 處理 OPTIONS 請求
 router.options('*', () => new Response(null, { headers: corsHeaders }));
 
-// 處理靜態檔案
+// 處理靜態檔案 - 服務端渲染 + KV 快取
 router.get('/', async (request, env: Env) => {
   const url = new URL(request.url);
   const page = parseInt(url.searchParams.get('page') || '1');
+  
+  // 嘗試從 KV 快取讀取
+  const cacheKey = `homepage:${page}`;
+  const cachedHtml = await env.KV.get(cacheKey, 'text');
+  
+  if (cachedHtml) {
+    return new Response(cachedHtml, {
+      headers: { 
+        'Content-Type': 'text/html; charset=utf-8',
+        'X-Cache': 'HIT',
+        ...corsHeaders 
+      },
+    });
+  }
+  
+  // 快取未命中，生成 HTML
   const html = await getHomePage(env, page, request);
+  
+  // 存入 KV 快取（5 分鐘 = 300 秒）
+  await env.KV.put(cacheKey, html, {
+    expirationTtl: 300
+  });
+  
   return new Response(html, {
-    headers: { 'Content-Type': 'text/html; charset=utf-8', ...corsHeaders },
+    headers: { 
+      'Content-Type': 'text/html; charset=utf-8',
+      'X-Cache': 'MISS',
+      ...corsHeaders 
+    },
   });
 });
 
@@ -535,6 +561,20 @@ router.post('/api/post', async (request, env: Env) => {
     let redirectTarget: string | null = null;
     if (!continualPost) {
       redirectTarget = resto > 0 ? `/res/${resto}.htm` : '/';
+    }
+
+    // 清除首頁 KV 快取
+    try {
+      // 清除所有頁面的快取（因為新文章可能影響多頁）
+      const threadsPerPage = parseInt(await getConfigValue(env, 'threads_per_page', '15'));
+      const maxPages = 10; // 清除前 10 頁的快取
+      
+      for (let i = 1; i <= maxPages; i++) {
+        await env.KV.delete(`homepage:${i}`);
+      }
+      console.info('Cleared homepage cache after new post');
+    } catch (error) {
+      console.error('Failed to clear homepage cache:', error);
     }
 
     return new Response(
@@ -3565,6 +3605,8 @@ async function getHomePage(env: Env, page: number = 1, request?: Request): Promi
   const defaultComment = await getConfigValue(env, 'default_comment', '');
   const additionInfo = await getConfigValue(env, 'form_notice', '');
   const threadsPerPage = parseInt(await getConfigValue(env, 'threads_per_page', '15'));
+  const showImgWH = await getConfigValue(env, 'show_image_dimensions', '1') === '1';
+  const useFloatForm = await getConfigValue(env, 'use_floating_form', '0') === '1';
 
   // 檢查是否為管理員
   const adminSystem = new AdminSystem(env);
@@ -3574,10 +3616,30 @@ async function getHomePage(env: Env, page: number = 1, request?: Request): Promi
   const fieldTrapNames = getDefaultFieldTrapNames();
   const honeypotNames = getHoneypotNames();
 
-  // 顯示設定
-  const showImgWH = await getConfigValue(env, 'show_image_dimensions', '1') === '1';
-  const useFloatForm = await getConfigValue(env, 'use_floating_form', '0') === '1';
-
+  // 取得文章資料（服務端渲染）
+  const pio = new PIOD1(env.DB);
+  await pio.prepare();
+  
+  const fileio = new FileIOR2(env.STORAGE);
+  await fileio.init();
+  
+  const offset = (page - 1) * threadsPerPage;
+  const threadNos = await pio.fetchThreadList(offset, threadsPerPage, true);
+  
+  // 讀取 RE_DEF 設定（首頁顯示回應數量）
+  const reDef = parseInt(await getConfigValue(env, 're_def', '5'));
+  
+  const threads = [];
+  for (const no of threadNos) {
+    const thread = await pio.getThread(no, reDef);
+    if (thread) {
+      threads.push(thread);
+    }
+  }
+  
+  // 服務端渲染文章 HTML
+  const threadsHtml = threads.map(thread => renderThreadServer(thread, fileio, showImgWH)).join('');
+  
   return `<!DOCTYPE html>
 <html lang="${env.DEFAULT_LANGUAGE || 'zh-TW'}">
 <head>
@@ -3696,7 +3758,7 @@ async function getHomePage(env: Env, page: number = 1, request?: Request): Promi
     </div>
     ` : ''}
 
-    <div id="threads"></div>
+    <div id="threads">${threadsHtml}</div>
   </div>
 
   <script>
@@ -4413,6 +4475,53 @@ function processComment(text: string, enableAutoLink: boolean, enableQuotes: boo
 async function verifyPassword(password: string, hash: string): Promise<boolean> {
   const passwordHash = await hashPassword(password);
   return passwordHash === hash;
+}
+
+// 服務端渲染函數
+function renderThreadServer(thread: any, fileio: FileIOR2, showImgWH: boolean): string {
+  let html = '<div class="thread">';
+  
+  thread.posts.forEach((post: any, index: number) => {
+    const isOp = index === 0;
+    html += '<div class="post ' + (isOp ? 'op' : 'reply') + ' clearfix">';
+    
+    // 文章標頭
+    html += '<div class="post-header">';
+    html += '<input type="checkbox" class="delete-checkbox" data-post-no="' + post.no + '" style="margin-right: 5px;">';
+    if (post.sub) html += '<span class="post-subject">' + htmlEscape(post.sub) + '</span> ';
+    html += '<span class="post-name">' + htmlEscape(post.name) + '</span> ';
+    html += '<span class="post-date">' + new Date(post.time * 1000).toLocaleString('zh-TW') + '</span> ';
+    html += '<span class="post-id">No.' + post.no + '</span>';
+    html += '</div>';
+    
+    // 圖片
+    if (post.tim && post.ext) {
+      html += '<div class="post-image">';
+      html += '<a href="/img/' + post.tim + post.ext + '" target="_blank">';
+      const thumbnailUrl = fileio.getThumbnailUrl(post.tim, post.ext, 250, 250);
+      html += '<img src="' + thumbnailUrl + '" alt="' + htmlEscape(post.filename || '') + '">';
+      html += '</a>';
+      html += '<div class="file-info">' + htmlEscape(post.filename || '');
+      if (showImgWH && post.w && post.h) { 
+        html += ' (' + post.w + 'x' + post.h + ')'; 
+      }
+      html += ' - ' + formatFileSize(post.filesize) + '</div>';
+      html += '</div>';
+    }
+    
+    // 內容
+    html += '<div class="post-content">' + (post.com || '') + '</div>';
+    html += '</div>';
+  });
+  
+  html += '</div>';
+  return html;
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
 }
 
 function htmlEscape(text: string): string {
