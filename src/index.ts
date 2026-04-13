@@ -890,7 +890,7 @@ router.get('/img/:filename', async (request, env: Env) => {
 router.get('/thumb/:filename', async (request, env: Env) => {
   const filename = request.params.filename;
   
-  // Extract tim and ext from filename (e.g., "1234567890s.jpg" -> tim="1234567890", ext=".jpg")
+  // Extract tim and ext from filename (e.g., "1234567890s.jpg" -> tim="1234567890", ext="jpg")
   const match = filename.match(/^(\d+)s\.(.+)$/);
   if (!match) {
     return new Response('Invalid thumbnail filename format', { status: 400 });
@@ -898,10 +898,9 @@ router.get('/thumb/:filename', async (request, env: Env) => {
   
   const [, tim, ext] = match;
   
-  // Build the original image URL and CF Image Resizing URL
-  const url = new URL(request.url);
-  const originalUrl = `${url.origin}/img/${tim}.${ext}`;
-  const thumbnailUrl = `${url.origin}/cdn-cgi/image/width=250,height=250,fit=cover/${originalUrl}`;
+  // Redirect to R2 public domain with CF Image Resizing
+  // This matches the format used in getThumbnailUrl()
+  const thumbnailUrl = `https://r2.pixmicat.dcard.dev/cdn-cgi/image/width=250,height=250,quality=75,format=auto,fit=cover/${tim}.${ext}`;
   
   // 302 redirect to the CDN resizing URL
   return Response.redirect(thumbnailUrl, 302);
@@ -1440,7 +1439,7 @@ router.post('/admin/api/login', async (request, env: Env) => {
     headers.set('Content-Type', 'application/json');
     headers.set(
       'Set-Cookie',
-      `admin_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=3600`
+      `admin_session=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=3600`
     );
 
     return new Response(JSON.stringify({ success: true }), {
@@ -1471,7 +1470,7 @@ router.post('/admin/api/logout', async (request, env: Env) => {
 
   const headers = new Headers();
   headers.set('Content-Type', 'application/json');
-  headers.set('Set-Cookie', 'admin_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0');
+  headers.set('Set-Cookie', 'admin_session=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0');
 
   return new Response(JSON.stringify({ success: true }), {
     status: 200,
