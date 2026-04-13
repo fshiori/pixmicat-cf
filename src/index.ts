@@ -960,6 +960,7 @@ router.get('/thumb/:filename', async (request, env: Env) => {
 router.get('/res/:no.htm', async (request, env: Env) => {
   const pio = new PIOD1(env.DB);
   await pio.prepare();
+  const fileio = new FileIOR2(env.STORAGE);
 
   const no = parseInt(request.params.no.replace('.htm', '') || '0');
   const url = new URL(request.url);
@@ -1063,7 +1064,7 @@ router.get('/res/:no.htm', async (request, env: Env) => {
         ${post.tim && post.ext ? `
           <div class="post-image">
             <a href="/img/${post.tim}${post.ext}" target="_blank">
-              <img src="/cdn-cgi/image/width=250,height=250,quality=75,format=auto,fit=cover/img/${post.tim}${post.ext}" alt="${htmlEscape(post.filename || '')}">
+              <img src="${fileio.getThumbnailUrl(post.tim, post.ext, 250, 250)}" alt="${htmlEscape(post.filename || '')}">
             </a>
             <div class="file-info">
               ${htmlEscape(post.filename || '')}<br>
@@ -1293,6 +1294,7 @@ router.get('/category/:name', async (request, env: Env) => {
 
   const pio = new PIOD1(env.DB);
   await pio.prepare();
+  const fileio = new FileIOR2(env.STORAGE);
 
   const limit = 15;
   const posts = await pio.getPostsByCategory(categoryName, {
@@ -1345,7 +1347,7 @@ router.get('/category/:name', async (request, env: Env) => {
     return `
       <div class="post">
         <div class="post-header">
-          ${post.tim && post.ext ? `<img src="/cdn-cgi/image/width=100,height=100,quality=75,format=auto,fit=cover/img/${post.tim}${post.ext}" class="thumbnail" alt="縮圖">` : ''}
+          ${post.tim && post.ext ? `<img src="${fileio.getThumbnailUrl(post.tim, post.ext, 100, 100)}" class="thumbnail" alt="縮圖">` : ''}
           <strong>No.${post.no}</strong>
           ${post.name !== defaultName ? `<strong>${htmlEscape(post.name)}</strong>` : htmlEscape(post.name)}
           ${post.email ? `<span style="color: #800000;">&lt;${htmlEscape(post.email)}&gt;</span>` : ''}
@@ -4032,7 +4034,7 @@ async function getHomePage(env: Env, page: number = 1, request?: Request): Promi
       if (post.tim && post.ext) {
         html += '<div class="post-image">';
         html += '<a href="/img/' + post.tim + post.ext + '" target="_blank">';
-        html += '<img src="/cdn-cgi/image/width=200,height=200,quality=75,format=auto,fit=cover/img/' + post.tim + post.ext + '" alt="">';
+        html += '<img src="https://r2.pixmicat.dcard.dev/cdn-cgi/image/width=200,height=200,quality=75,format=auto,fit=cover/' + post.tim + post.ext + '" alt="">';
         html += '</a>';
         html += '<div class="file-info">' + escapeHtml(post.filename || '');
         if (post.w && post.h) { html += ' (' + post.w + 'x' + post.h + ')'; }
