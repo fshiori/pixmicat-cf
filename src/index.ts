@@ -681,7 +681,11 @@ router.get('/api/update', async (request, env: Env) => {
 
   if (threadNo <= 0) {
     return new Response(
-      JSON.stringify({ success: false, error: '無效的討論串編號' }),
+      JSON.stringify({ 
+        success: false, 
+        error: '無效的討論串編號',
+        hint: '請使用 ?thread=<討論串編號>&time=<時間戳>'
+      }),
       {
         status: 400,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
@@ -849,111 +853,27 @@ router.get('/img/:filename', async (request, env: Env) => {
   return new Response(data, { headers });
 });
 
-// 縮圖代理路由
-// 生產環境：使用 Cloudflare Image Resizing API
-// 本地開發：使用 sharp 生成縮圖
+// Thumbnail route - redirect to CF Image Resizing URL
+// This handles legacy /thumb/ requests by redirecting to the CDN resizing endpoint
 router.get('/thumb/:filename', async (request, env: Env) => {
-  // 提取 tim（去掉 's' 後綴）
   const filename = request.params.filename;
-  const tim = filename.replace(/s\.jpg$/, '');
+  const url = new URL(request.url);
 
-  // 嘗試從 R2 取得原始圖片
-  let object: R2Object | null = null;
-  const extensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
-
-  for (const ext of extensions) {
-    object = await env.STORAGE.get(tim + ext);
-    if (object) break;
+  // Extract tim and ext from filename (e.g., "1234567890s.jpg" -> tim="1234567890", ext=".jpg")
+  const match = filename.match(/^(\d+)s\.(.+)$/);
+  if (!match) {
+    return new Response('Invalid thumbnail filename format', { status: 400 });
   }
 
-  if (!object) {
-    return new Response('Not found', { status: 404 });
-  }
+  const [, tim, ext] = match;
+  const thumbWidth = 250;
+  const thumbHeight = 250;
+  const quality = 75;
 
-  // 檢查是否為本地開發環境
-  const isLocalDev = request.url.includes('localhost') || request.url.includes('127.0.0.1');
+  // Redirect to Cloudflare Image Resizing URL
+  const cfResizeUrl = `https://r2.pixmicat.dcard.dev/cdn-cgi/image/width=${thumbWidth},height=${thumbHeight},quality=${quality},format=auto,fit=cover/${tim}.${ext}`;
 
-  if (!isLocalDev) {
-    // 生產環境：使用內建縮圖生成（imagescript - pure JavaScript）
-    try {
-      const { generateWorkerThumbnail, isImageSmallerThan } = await import('./lib/image-worker.js');
-      const originalImage = await object.arrayBuffer();
-
-      // 如果圖片已經很小，直接返回原圖
-      const isSmall = await isImageSmallerThan(originalImage, 250, 250);
-      if (isSmall) {
-        return new Response(originalImage, {
-          headers: {
-            'Content-Type': object.httpMetadata?.contentType || 'image/jpeg',
-            'Cache-Control': 'public, max-age=31536000',
-            'X-Thumbnail-Source': 'original',
-          },
-        });
-      }
-
-      // 生成縮圖（250x250, JPEG, quality 75）
-      const thumbnailBuffer = await generateWorkerThumbnail(originalImage, {
-        width: 250,
-        height: 250,
-        quality: 75
-      });
-
-      const headers = new Headers();
-      headers.set('Content-Type', 'image/jpeg');
-      headers.set('Content-Length', thumbnailBuffer.byteLength.toString());
-      headers.set('Cache-Control', 'public, max-age=31536000');
-      headers.set('X-Thumbnail-Source', 'worker-imagescript');
-
-      return new Response(thumbnailBuffer, { headers });
-    } catch (error) {
-      // 如果縮圖生成失敗，回退到原圖
-      console.error('Worker thumbnail generation failed, falling back to original image:', error);
-
-      const data = await object.arrayBuffer();
-      return new Response(data, {
-        headers: {
-          'Content-Type': object.httpMetadata?.contentType || 'image/jpeg',
-          'Cache-Control': 'public, max-age=31536000',
-          'X-Thumbnail-Error': 'generation-failed',
-        },
-      });
-    }
-  }
-
-  // 本地開發環境：使用 sharp 生成縮圖
-  try {
-    const { generateLocalThumbnail } = await import('./lib/image-local.js');
-    const originalImage = await object.arrayBuffer();
-
-    // 生成縮圖（250x250, JPEG, quality 75）
-    const thumbnailBuffer = await generateLocalThumbnail(originalImage, {
-      width: 250,
-      height: 250,
-      quality: 75,
-      format: 'jpeg'
-    });
-
-    const headers = new Headers();
-    headers.set('Content-Type', 'image/jpeg');
-    headers.set('Content-Length', thumbnailBuffer.byteLength.toString());
-    headers.set('Cache-Control', 'public, max-age=31536000');
-    headers.set('X-Local-Thumbnail', 'true'); // 標記為本地生成的縮圖
-
-    return new Response(thumbnailBuffer, { headers });
-  } catch (error) {
-    // 如果 sharp 不可用，回退到原圖
-    console.warn('Local thumbnail generation failed, falling back to original image:', error);
-
-    const headers = new Headers();
-    headers.set('Content-Type', object.httpMetadata?.contentType || 'image/jpeg');
-    headers.set('Content-Length', object.size.toString());
-    headers.set('etag', object.httpEtag || '');
-    headers.set('Cache-Control', 'public, max-age=31536000');
-    headers.set('X-Thumbnail-Fallback', 'original');
-
-    const data = await object.arrayBuffer();
-    return new Response(data, { headers });
-  }
+  return Response.redirect(cfResizeUrl, 302);
 });
 
 // 單一討論串頁面
@@ -1481,8 +1401,7 @@ router.post('/admin/api/login', async (request, env: Env) => {
     }
 
     // 產生 session token
-    const token = await admin.generateSessionToken();
-    await admin.createSession(token);
+    const token = await admin.createSession('admin');
 
     // 設定 cookie
     const headers = new Headers();
@@ -2505,9 +2424,9 @@ router.get('/admin/bans', async (request, env: Env) => {
   const limit = 50;
   const offset = (page - 1) * limit;
 
-  const banResult = await env.DB.prepare('SELECT * FROM bans ORDER BY created_at DESC LIMIT ? OFFSET ?')
+  const banResult = await env.DB.prepare('SELECT * FROM banlist ORDER BY created_at DESC LIMIT ? OFFSET ?')
     .bind(limit, offset)
-    .all<{ id: number; ip: string; reason: string; created_at: number; expires_at: number | null; created_by: string }>();
+    .all<{ id: number; type: string; pattern: string; created_at: number; expires_at: number | null; created_by: string; reason: string }>();
 
   const bans = banResult.results || [];
 
@@ -2561,7 +2480,7 @@ router.get('/admin/bans', async (request, env: Env) => {
       <thead>
         <tr>
           <th>ID</th>
-          <th>IP 位址</th>
+          <th>類型 / 模式</th>
           <th>原因</th>
           <th>建立時間</th>
           <th>過期時間</th>
@@ -2575,7 +2494,7 @@ router.get('/admin/bans', async (request, env: Env) => {
           return `
             <tr>
               <td>${ban.id}</td>
-              <td>${htmlEscape(ban.ip)}</td>
+              <td>${htmlEscape(ban.type)}: ${htmlEscape(ban.pattern)}</td>
               <td>${htmlEscape(ban.reason || '')}</td>
               <td>${new Date(ban.created_at * 1000).toLocaleString('zh-TW')}</td>
               <td class="${isExpired ? 'expired' : 'active'}">${ban.expires_at ? new Date(ban.expires_at * 1000).toLocaleString('zh-TW') : '永久'}</td>
@@ -2722,8 +2641,8 @@ router.post('/admin/api/bans', async (request, env: Env) => {
     const now = Math.floor(Date.now() / 1000);
     const expiresAt = duration > 0 ? now + duration : null;
 
-    await env.DB.prepare('INSERT INTO bans (ip, reason, expires_at, created_by) VALUES (?, ?, ?, ?)')
-      .bind(ip, reason || '', expiresAt, 'admin')
+    await env.DB.prepare('INSERT INTO banlist (type, pattern, reason, created_at, expires_at, created_by) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind('ip', ip, reason || '', now, expiresAt, 'admin')
       .run();
 
     return new Response(JSON.stringify({ success: true }), {
@@ -2759,7 +2678,7 @@ router.delete('/admin/api/bans/:id', async (request, env: Env) => {
 
     const id = parseInt(request.params.id || '0');
 
-    await env.DB.prepare('DELETE FROM bans WHERE id = ?')
+    await env.DB.prepare('DELETE FROM banlist WHERE id = ?')
       .bind(id)
       .run();
 
