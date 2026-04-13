@@ -256,18 +256,19 @@ export class AdminSystem {
 
   /**
    * 建立管理員 Session
+   * @param token 要使用的 session token（如果不提供，則自動生成）
    * @param username 用戶名（可選，預設 'admin'）
    * @param expiresIn 過期時間（秒）
    * @returns session token 字符串
    */
-  async createSession(username: string = 'admin', expiresIn: number = 3600): Promise<string> {
-    const token = await this.generateSessionToken();
+  async createSession(token?: string, username: string = 'admin', expiresIn: number = 3600): Promise<string> {
+    const sessionToken = token || await this.generateSessionToken();
     const sessionData = JSON.stringify({ username, createdAt: Date.now() });
-    await this.env.KV.put(`admin_session:${token}`, sessionData, {
+    await this.env.KV.put(`admin_session:${sessionToken}`, sessionData, {
       expirationTtl: expiresIn,
     });
     
-    return token;
+    return sessionToken;
   }
 
   /**
