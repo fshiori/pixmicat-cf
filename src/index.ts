@@ -885,111 +885,26 @@ router.get('/img/:filename', async (request, env: Env) => {
   return new Response(data, { headers });
 });
 
-// 縮圖代理路由
-// 生產環境：使用 Cloudflare Image Resizing API
-// 本地開發：使用 sharp 生成縮圖
+// Thumbnail route - redirect to CF Image Resizing URL
+// This route is legacy and redirects to the CDN resizing endpoint
 router.get('/thumb/:filename', async (request, env: Env) => {
-  // 提取 tim（去掉 's' 後綴）
   const filename = request.params.filename;
-  const tim = filename.replace(/s\.jpg$/, '');
-
-  // 嘗試從 R2 取得原始圖片
-  let object: R2Object | null = null;
-  const extensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
-
-  for (const ext of extensions) {
-    object = await env.STORAGE.get(tim + ext);
-    if (object) break;
+  
+  // Extract tim and ext from filename (e.g., "1234567890s.jpg" -> tim="1234567890", ext=".jpg")
+  const match = filename.match(/^(\d+)s\.(.+)$/);
+  if (!match) {
+    return new Response('Invalid thumbnail filename format', { status: 400 });
   }
-
-  if (!object) {
-    return new Response('Not found', { status: 404 });
-  }
-
-  // 檢查是否為本地開發環境
-  const isLocalDev = request.url.includes('localhost') || request.url.includes('127.0.0.1');
-
-  if (!isLocalDev) {
-    // 生產環境：使用內建縮圖生成（imagescript - pure JavaScript）
-    try {
-      const { generateWorkerThumbnail, isImageSmallerThan } = await import('./lib/image-worker.js');
-      const originalImage = await object.arrayBuffer();
-
-      // 如果圖片已經很小，直接返回原圖
-      const isSmall = await isImageSmallerThan(originalImage, 250, 250);
-      if (isSmall) {
-        return new Response(originalImage, {
-          headers: {
-            'Content-Type': object.httpMetadata?.contentType || 'image/jpeg',
-            'Cache-Control': 'public, max-age=31536000',
-            'X-Thumbnail-Source': 'original',
-          },
-        });
-      }
-
-      // 生成縮圖（250x250, JPEG, quality 75）
-      const thumbnailBuffer = await generateWorkerThumbnail(originalImage, {
-        width: 250,
-        height: 250,
-        quality: 75
-      });
-
-      const headers = new Headers();
-      headers.set('Content-Type', 'image/jpeg');
-      headers.set('Content-Length', thumbnailBuffer.byteLength.toString());
-      headers.set('Cache-Control', 'public, max-age=31536000');
-      headers.set('X-Thumbnail-Source', 'worker-imagescript');
-
-      return new Response(thumbnailBuffer, { headers });
-    } catch (error) {
-      // 如果縮圖生成失敗，回退到原圖
-      console.error('Worker thumbnail generation failed, falling back to original image:', error);
-
-      const data = await object.arrayBuffer();
-      return new Response(data, {
-        headers: {
-          'Content-Type': object.httpMetadata?.contentType || 'image/jpeg',
-          'Cache-Control': 'public, max-age=31536000',
-          'X-Thumbnail-Error': 'generation-failed',
-        },
-      });
-    }
-  }
-
-  // 本地開發環境：使用 sharp 生成縮圖
-  try {
-    const { generateLocalThumbnail } = await import('./lib/image-local.js');
-    const originalImage = await object.arrayBuffer();
-
-    // 生成縮圖（250x250, JPEG, quality 75）
-    const thumbnailBuffer = await generateLocalThumbnail(originalImage, {
-      width: 250,
-      height: 250,
-      quality: 75,
-      format: 'jpeg'
-    });
-
-    const headers = new Headers();
-    headers.set('Content-Type', 'image/jpeg');
-    headers.set('Content-Length', thumbnailBuffer.byteLength.toString());
-    headers.set('Cache-Control', 'public, max-age=31536000');
-    headers.set('X-Local-Thumbnail', 'true'); // 標記為本地生成的縮圖
-
-    return new Response(thumbnailBuffer, { headers });
-  } catch (error) {
-    // 如果 sharp 不可用，回退到原圖
-    console.warn('Local thumbnail generation failed, falling back to original image:', error);
-
-    const headers = new Headers();
-    headers.set('Content-Type', object.httpMetadata?.contentType || 'image/jpeg');
-    headers.set('Content-Length', object.size.toString());
-    headers.set('etag', object.httpEtag || '');
-    headers.set('Cache-Control', 'public, max-age=31536000');
-    headers.set('X-Thumbnail-Fallback', 'original');
-
-    const data = await object.arrayBuffer();
-    return new Response(data, { headers });
-  }
+  
+  const [, tim, ext] = match;
+  
+  // Build the original image URL and CF Image Resizing URL
+  const url = new URL(request.url);
+  const originalUrl = `${url.origin}/img/${tim}.${ext}`;
+  const thumbnailUrl = `${url.origin}/cdn-cgi/image/width=250,height=250,fit=cover/${originalUrl}`;
+  
+  // 302 redirect to the CDN resizing URL
+  return Response.redirect(thumbnailUrl, 302);
 });
 
 // 單一討論串頁面

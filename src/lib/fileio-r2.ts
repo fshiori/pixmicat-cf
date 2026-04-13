@@ -49,8 +49,9 @@ export class FileIOR2 implements FileIO {
   }
 
   async saveThumbnail(thumbnail: Blob, tim: string): Promise<void> {
-    const key = `${tim}s.jpg`;
-    await this.r2.put(key, thumbnail);
+    // No-op: thumbnails are generated dynamically by CDN
+    // This method exists for API compatibility but does nothing
+    return Promise.resolve();
   }
 
   async deleteImage(tim: string, ext: string): Promise<void> {
@@ -152,20 +153,10 @@ export class FileIOR2 implements FileIO {
     maxHeight: number,
     quality: number = 0.75
   ): Promise<Blob> {
-    const { isImageSmallerThan } = await import('./image-worker.js');
-    
-    // 檢查是否需要縮圖
-    const isSmall = await isImageSmallerThan(image as ArrayBuffer, maxWidth, maxHeight);
-    
-    if (isSmall) {
-      console.info(`Image already smaller than ${maxWidth}x${maxHeight}, returning original`);
-      return new Blob([image], { type: 'image/jpeg' });
-    }
-
-    // 生產環境暫時返回原圖（待 Cloudflare Image Resizing 啟用）
-    // 或實作實際縮圖生成（需要與 Cloudflare Workers 相容的圖片處理庫）
-    console.warn('Thumbnail generation in production not yet implemented, returning original image');
-    return new Blob([image], { type: 'image/jpeg' });
+    throw new Error(
+      'Use getThumbnailUrl() for Cloudflare Image Resizing CDN instead of resizeImage(). ' +
+      'The CDN handles thumbnail generation dynamically.'
+    );
   }
 
   async generateThumbnail(
@@ -174,23 +165,10 @@ export class FileIOR2 implements FileIO {
     maxHeight: number,
     quality: number = 0.75
   ): Promise<Blob> {
-    const { isImageSmallerThan } = await import('./image-worker.js');
-    
-    // 檢查是否需要縮圖
-    const imageBuffer = new Uint8Array(image).buffer as ArrayBuffer;
-    const isSmall = await isImageSmallerThan(imageBuffer, maxWidth, maxHeight);
-    
-    if (isSmall) {
-      console.info(`Image already smaller than ${maxWidth}x${maxHeight}, returning original`);
-      // @ts-ignore - TypeScript type system limitation with ArrayBufferLike
-      return new Blob([image], { type: 'image/jpeg' });
-    }
-
-    // 生產環境暫時返回原圖（待 Cloudflare Image Resizing 啟用）
-    // 或實作實際縮圖生成（需要與 Cloudflare Workers 相容的圖片處理庫）
-    console.warn('Thumbnail generation in production not yet implemented, returning original image');
-    // @ts-ignore - TypeScript type system limitation with ArrayBufferLike
-    return new Blob([image], { type: 'image/jpeg' });
+    throw new Error(
+      'Use getThumbnailUrl() for Cloudflare Image Resizing CDN instead of generateThumbnail(). ' +
+      'The CDN handles thumbnail generation dynamically.'
+    );
   }
 
   async getImageDimensions(image: ArrayBuffer): Promise<{ width: number; height: number }> {
