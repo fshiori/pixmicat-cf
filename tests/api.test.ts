@@ -148,22 +148,6 @@ describe('API Routes', () => {
         expect(image).toBeDefined();
       });
     });
-
-    describe('GET /thumb/:filename', () => {
-      it('應該返回縮圖', async () => {
-        const mockThumbData = new Uint8Array([1, 2, 3, 4, 5]);
-        const mockObject = {
-          arrayBuffer: vi.fn(() => Promise.resolve(mockThumbData.buffer)),
-          httpMetadata: { contentType: 'image/jpeg' },
-          size: 5,
-        };
-
-        (mockEnv.STORAGE.get as any).mockResolvedValue(mockObject);
-
-        const thumb = await mockEnv.STORAGE.get('123456s.jpg');
-        expect(thumb).toBeDefined();
-      });
-    });
   });
 
   describe('管理員路由', () => {

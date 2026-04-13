@@ -1,13 +1,10 @@
 /**
  * Cloudflare Workers 圖片處理模組
- * 生產環境圖片處理（暫時返回原圖，待 Cloudflare Image Resizing 啟用）
+ * 用於解析圖片尺寸資訊
+ *
+ * 縮圖功能使用 Cloudflare Image Resizing CDN 動態生成，
+ * 不需要在 Worker 端預先產生縮圖 buffer。
  */
-
-export interface ThumbnailOptions {
-  width: number;
-  height: number;
-  quality?: number;
-}
 
 /**
  * 獲取圖片尺寸資訊
@@ -101,45 +98,4 @@ function parseWebpDimensions(buffer: Uint8Array): { width: number; height: numbe
     }
   }
   return { width: 0, height: 0 };
-}
-
-/**
- * 檢查圖片是否需要縮圖（已經小於目標尺寸）
- * @param imageBuffer 圖片資料
- * @param maxWidth 目標最大寬度
- * @param maxHeight 目標最大高度
- * @returns 如果圖片小於目標尺寸返回 true
- */
-export async function isImageSmallerThan(
-  imageBuffer: ArrayBuffer,
-  maxWidth: number,
-  maxHeight: number
-): Promise<boolean> {
-  try {
-    const dimensions = await getImageDimensions(imageBuffer);
-    // 如果無法解析尺寸，預設返回 false（需要處理）
-    if (dimensions.width === 0 || dimensions.height === 0) {
-      return false;
-    }
-    return dimensions.width <= maxWidth && dimensions.height <= maxHeight;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * 生產環境縮圖生成（暫時返回原圖）
- * 注意：此函數目前返回原圖，待 Cloudflare Image Resizing 啟用後將實際生成縮圖
- * @param imageBuffer 原始圖片資料
- * @param options 縮圖選項
- * @returns 原圖 ArrayBuffer（待實作）
- */
-export async function generateWorkerThumbnail(
-  imageBuffer: ArrayBuffer,
-  options: ThumbnailOptions
-): Promise<ArrayBuffer> {
-  // TODO: 啟用 Cloudflare Image Resizing 或實作實際縮圖生成
-  // 目前暫時返回原圖
-  console.warn('Thumbnail generation not implemented in production, returning original image');
-  return imageBuffer;
 }

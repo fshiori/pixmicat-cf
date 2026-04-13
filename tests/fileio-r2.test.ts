@@ -24,78 +24,46 @@ describe('FileIOR2 - saveThumbnail', () => {
     fileio = new FileIOR2(mockR2);
   });
 
-  it('should save thumbnail with correct key format', async () => {
+  it('saveThumbnail is no-op (uses CDN dynamic thumbnails)', async () => {
     const tim = '1234567890';
-    const thumbnailData = new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0]); // JPEG header
+    const thumbnailData = new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0]);
 
     await fileio.saveThumbnail(thumbnailData as any, tim);
 
-    expect(mockR2.put).toHaveBeenCalledWith(
-      `${tim}s.jpg`,
-      thumbnailData
-    );
+    // 不應該調用 R2.put，因為我們使用 CDN 動態生成縮圖
+    expect(mockR2.put).not.toHaveBeenCalled();
   });
 
-  it('should save thumbnail with Blob', async () => {
-    const tim = '1234567890';
-    const blob = new Blob(['test data'], { type: 'image/jpeg' });
-
-    await fileio.saveThumbnail(blob as any, tim);
-
-    expect(mockR2.put).toHaveBeenCalledWith(
-      `${tim}s.jpg`,
-      blob
-    );
-  });
-
-  it('should generate correct thumbnail URL (returns original image URL)', () => {
+  it('should generate correct thumbnail URL (returns CF Image Resizing URL)', () => {
     const tim = '1234567890';
     const ext = '.jpg';
     const url = fileio.getThumbnailUrl(tim, ext);
 
-    // 現在返回原圖 URL（待實作實際縮圖生成）
-    expect(url).toBe('/img/1234567890.jpg');
+    // 使用 Cloudflare Image Resizing URL
+    expect(url).toBe('https://r2.pixmicat.dcard.dev/cdn-cgi/image/width=250,height=250,quality=75,format=auto,fit=cover/1234567890.jpg');
   });
 
-  it('should use original image in local environment when resize needed', async () => {
-    // 創建一個大於縮圖尺寸的模擬圖片
+  it('resizeImage throws error (use CDN instead)', async () => {
     const largeImage = new ArrayBuffer(1000);
     const maxWidth = 250;
     const maxHeight = 250;
 
-    // Mock getImageDimensions 返回大尺寸
-    vi.spyOn(fileio as any, 'getImageDimensions').mockResolvedValue({
-      width: 1920,
-      height: 1080,
-    });
-
-    const result = await fileio.resizeImage(largeImage, maxWidth, maxHeight);
-
-    // 在本地環境中應該返回原圖
-    expect(result).toBeInstanceOf(Blob);
-    expect(mockR2.put).not.toHaveBeenCalled(); // 不應該嘗試使用 CF Image Resizing
+    // resizeImage 應該拋出錯誤，要求使用 getThumbnailUrl()
+    await expect(fileio.resizeImage(largeImage, maxWidth, maxHeight)).rejects.toThrow(
+      'Use getThumbnailUrl() for Cloudflare Image Resizing CDN'
+    );
   });
 
-  it('should not attempt CF Image Resizing in production environment (using URL transformation)', async () => {
-    // 創建生產環境的 fileio
+  it('getThumbnailUrl generates CF Image Resizing URL', async () => {
     const prodFileio = new FileIOR2(mockR2);
 
-    // Mock getImageDimensions 返回大尺寸
-    vi.spyOn(prodFileio as any, 'getImageDimensions').mockResolvedValue({
-      width: 1920,
-      height: 1080,
-    });
-
+    // resizeImage 應該拋出錯誤
     const largeImage = new ArrayBuffer(1000);
-    const result = await prodFileio.resizeImage(largeImage, 250, 250);
+    await expect(prodFileio.resizeImage(largeImage, 250, 250)).rejects.toThrow();
 
-    // 現在使用原圖 URL（待實作實際縮圖生成）
-    expect(result).toBeInstanceOf(Blob);
-    expect(mockR2.put).not.toHaveBeenCalled(); // 不應該再調用 put
-    
-    // 檢查 getThumbnailUrl 返回原圖 URL
+    // 使用 getThumbnailUrl() 產生 CDN URL
     const thumbUrl = prodFileio.getThumbnailUrl('123', '.jpg', 250, 250);
-    expect(thumbUrl).toBe('/img/123.jpg'); // 返回原圖 URL，不是 CF Image Resizing URL
+    expect(thumbUrl).toBe('https://r2.pixmicat.dcard.dev/cdn-cgi/image/width=250,height=250,quality=75,format=auto,fit=cover/123.jpg');
   });
 
   it('應該刪除圖片', async () => {
@@ -294,27 +262,22 @@ describe('FileIOR2 - saveThumbnail', () => {
   });
 
   describe('resizeImage', () => {
-    it('應該返回原始圖片如果不需要縮放', async () => {
+    it('throws error - use getThumbnailUrl() instead', async () => {
       const mockImage = new ArrayBuffer(100);
-      const mockDimensions = { width: 100, height: 100 };
-      
-      vi.spyOn(fileio as any, 'getImageDimensions').mockResolvedValue(mockDimensions);
 
-      const result = await fileio.resizeImage(mockImage, 200, 200);
-
-      expect(result).toBeInstanceOf(Blob);
+      // resizeImage 應該拋出錯誤，要求使用 CDN
+      await expect(fileio.resizeImage(mockImage, 200, 200)).rejects.toThrow(
+        'Use getThumbnailUrl() for Cloudflare Image Resizing CDN'
+      );
     });
 
-    it('應該拋出錯誤如果縮放失敗', async () => {
+    it('handles errors gracefully', async () => {
       const mockImage = new ArrayBuffer(100);
-      const mockDimensions = { width: 1000, height: 1000 };
-      
-      vi.spyOn(fileio as any, 'getImageDimensions').mockResolvedValue(mockDimensions);
-      mockR2.put = vi.fn(() => Promise.reject(new Error('R2 error')));
 
-      // 應該 fallback 到原始圖片
-      const result = await fileio.resizeImage(mockImage, 100, 100);
-      expect(result).toBeInstanceOf(Blob);
+      // resizeImage 應該拋出錯誤，要求使用 CDN
+      await expect(fileio.resizeImage(mockImage, 100, 100)).rejects.toThrow(
+        'Use getThumbnailUrl() for Cloudflare Image Resizing CDN'
+      );
     });
   });
 

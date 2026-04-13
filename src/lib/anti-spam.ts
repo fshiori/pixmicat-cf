@@ -106,9 +106,9 @@ export class AntiSpamSystem {
 
     // 1. 檢查資料庫中的明確 IP 封鎖
     const result = await this.env.DB.prepare(
-      'SELECT * FROM bans WHERE ip = ? AND (expires_at IS NULL OR expires_at > ?)'
+      'SELECT * FROM banlist WHERE type = ? AND pattern = ? AND (expires_at IS NULL OR expires_at > ?)'
     )
-      .bind(ip, Math.floor(Date.now() / 1000))
+      .bind('ip', ip, Math.floor(Date.now() / 1000))
       .first();
 
     if (result) {
