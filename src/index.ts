@@ -2150,6 +2150,10 @@ router.post('/admin/api/config', async (request, env: Env) => {
 
     // 清除快取
     await env.KV.delete(`config:${key}`);
+    // 清除首頁快取（config 變更可能影響首頁顯示，如 title）
+    await env.KV.delete('homepage:1').catch((err: Error) =>
+      console.error('Failed to clear homepage cache:', err)
+    );
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
@@ -2202,6 +2206,10 @@ router.put('/admin/api/config/:key', async (request, env: Env) => {
 
     // 清除快取
     await env.KV.delete(`config:${key}`);
+    // 清除首頁快取（config 變更可能影響首頁顯示，如 title）
+    await env.KV.delete('homepage:1').catch((err: Error) =>
+      console.error('Failed to clear homepage cache:', err)
+    );
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
@@ -2252,6 +2260,10 @@ router.delete('/admin/api/config/:key', async (request, env: Env) => {
 
     // 清除快取
     await env.KV.delete(`config:${key}`);
+    // 清除首頁快取
+    await env.KV.delete('homepage:1').catch((err: Error) =>
+      console.error('Failed to clear homepage cache:', err)
+    );
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
@@ -2455,9 +2467,9 @@ router.get('/admin/bans', async (request, env: Env) => {
   const limit = 50;
   const offset = (page - 1) * limit;
 
-  const banResult = await env.DB.prepare('SELECT * FROM bans ORDER BY created_at DESC LIMIT ? OFFSET ?')
+  const banResult = await env.DB.prepare('SELECT * FROM banlist ORDER BY created_at DESC LIMIT ? OFFSET ?')
     .bind(limit, offset)
-    .all<{ id: number; ip: string; reason: string; created_at: number; expires_at: number | null; created_by: string }>();
+    .all<{ id: number; type: string; pattern: string; reason: string; created_at: number; expires_at: number | null; created_by: string }>();
 
   const bans = banResult.results || [];
 
@@ -2511,7 +2523,8 @@ router.get('/admin/bans', async (request, env: Env) => {
       <thead>
         <tr>
           <th>ID</th>
-          <th>IP 位址</th>
+          <th>類型</th>
+          <th>模式</th>
           <th>原因</th>
           <th>建立時間</th>
           <th>過期時間</th>
@@ -2525,7 +2538,8 @@ router.get('/admin/bans', async (request, env: Env) => {
           return `
             <tr>
               <td>${ban.id}</td>
-              <td>${htmlEscape(ban.ip)}</td>
+              <td>${htmlEscape(ban.type)}</td>
+              <td>${htmlEscape(ban.pattern)}</td>
               <td>${htmlEscape(ban.reason || '')}</td>
               <td>${new Date(ban.created_at * 1000).toLocaleString('zh-TW')}</td>
               <td class="${isExpired ? 'expired' : 'active'}">${ban.expires_at ? new Date(ban.expires_at * 1000).toLocaleString('zh-TW') : '永久'}</td>
@@ -2672,8 +2686,8 @@ router.post('/admin/api/bans', async (request, env: Env) => {
     const now = Math.floor(Date.now() / 1000);
     const expiresAt = duration > 0 ? now + duration : null;
 
-    await env.DB.prepare('INSERT INTO bans (ip, reason, expires_at, created_by) VALUES (?, ?, ?, ?)')
-      .bind(ip, reason || '', expiresAt, 'admin')
+    await env.DB.prepare('INSERT INTO banlist (type, pattern, reason, expires_at, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind('ip', ip, reason || '', expiresAt, 'admin', now)
       .run();
 
     return new Response(JSON.stringify({ success: true }), {
@@ -2709,7 +2723,7 @@ router.delete('/admin/api/bans/:id', async (request, env: Env) => {
 
     const id = parseInt(request.params.id || '0');
 
-    await env.DB.prepare('DELETE FROM bans WHERE id = ?')
+    await env.DB.prepare('DELETE FROM banlist WHERE id = ?')
       .bind(id)
       .run();
 
