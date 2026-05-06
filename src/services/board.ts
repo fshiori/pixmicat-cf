@@ -9,6 +9,11 @@ type BoardOptions = {
   page: number;
 };
 
+type ThreadOptions = {
+  resno: number;
+  page: number | "RE_PAGE_MAX" | "all";
+};
+
 export async function renderBoardIndex(env: Env, options: BoardOptions = { page: 0 }): Promise<string> {
   const pio = new PioD1(env.DB);
   const title = await getConfig(env, "TITLE", env.TITLE || "Pixmicat!-PIO");
@@ -31,7 +36,28 @@ export async function renderBoardIndex(env: Env, options: BoardOptions = { page:
   return renderPage(title, threads, renderPageNav(page, threadCount, pageDef));
 }
 
-function renderPage(title: string, threads: string, pageNav: string): string {
+export async function renderThreadView(env: Env, options: ThreadOptions): Promise<string> {
+  const pio = new PioD1(env.DB);
+  const title = await getConfig(env, "TITLE", env.TITLE || "Pixmicat!-PIO");
+  if (!(await pio.isThread(options.resno))) {
+    return renderErrorPage(title, "欲回應之文章並不存在！");
+  }
+
+  const tree = await pio.fetchPostList(options.resno);
+  const replyCount = Math.max(tree.length - 1, 0);
+  const rePageDef = await getNumberConfig(env, "RE_PAGE_DEF", 30);
+  const page = normalizeReplyPage(options.page, replyCount, rePageDef);
+  const all = options.page === "all";
+  const start = all || rePageDef === 0 ? 1 : page * rePageDef + 1;
+  const amount = all || rePageDef === 0 ? replyCount : rePageDef;
+  const treeCut = [options.resno, ...tree.slice(start, start + amount)];
+  const posts = orderThreadPosts(await pio.fetchPosts(treeCut), treeCut);
+  const threads = await arrangeThread(env, tree, treeCut, posts, 0, options.resno);
+
+  return renderPage(title, threads, renderReplyPageNav(options.resno, page, replyCount, rePageDef, all), options.resno);
+}
+
+function renderPage(title: string, threads: string, pageNav: string, resno = 0): string {
   let html = "";
   const baseLabels = {
     "{$TITLE}": title,
@@ -53,7 +79,7 @@ function renderPage(title: string, threads: string, pageNav: string): string {
   html += parseBlock("JSHEADER", baseLabels);
   html += "</head>";
   html += parseBlock("BODYHEAD", baseLabels);
-  html += renderPostForm();
+  html += renderPostForm(resno);
   html += parseBlock("MAIN", {
     "{$THREADFRONT}": "",
     "{$THREADREAR}": "",
@@ -74,16 +100,18 @@ function renderPage(title: string, threads: string, pageNav: string): string {
   return html;
 }
 
-function renderPostForm(): string {
+function renderPostForm(resno = 0): string {
   const inputMax = 100;
   const commMax = 2000;
   const maxKb = 2000;
   return parseBlock("POSTFORM", {
     "{$SELF}": "pixmicat.php",
-    "{$FORMTOP}": `\n[<span id="show" class="hide" onmouseover="showform();" onclick="showform();">${t("form_showpostform")}</span><span id="hide" class="show" onmouseover="hideform();" onclick="hideform();">${t("form_hidepostform")}</span>]`,
+    "{$FORMTOP}": resno
+      ? `[<a href="index.htm?${Date.now()}">${t("return")}</a>]<div class="bar_reply">回應模式</div>`
+      : `\n[<span id="show" class="hide" onmouseover="showform();" onclick="showform();">${t("form_showpostform")}</span><span id="hide" class="show" onmouseover="hideform();" onclick="hideform();">${t("form_hidepostform")}</span>]`,
     "{$MODE}": "regist",
     "{$MAX_FILE_SIZE}": maxKb * 1024,
-    "{$RESTO}": "",
+    "{$RESTO}": resno ? `<input type="hidden" name="resto" value="${resno}" />` : "",
     "{$FORM_NAME_TEXT}": t("form_name"),
     "{$FORM_NAME_FIELD}": `<input class="hide" type="text" name="name" value="spammer" /><input maxlength="${inputMax}" type="text" name="bvUFbdrIC" id="fname" size="28" value="" />`,
     "{$FORM_EMAIL_TEXT}": t("form_email"),
@@ -111,8 +139,33 @@ function renderPostForm(): string {
     "{$HOOKPOSTINFO}": "",
     "{$ADDITION_INFO}": "",
     "{$FORM_NOTICE_NOSCRIPT}": t("form_notice_noscript"),
-    "{$FORMBOTTOM}": '<script type="text/javascript">hideform();</script>'
+    "{$FORMBOTTOM}": resno ? "" : '<script type="text/javascript">hideform();</script>'
   });
+}
+
+function renderReplyPageNav(resno: number, page: number, replyCount: number, rePageDef: number, all: boolean): string {
+  let nav = '<div id="page_switch">';
+  if (rePageDef > 0) {
+    const prev = page - 1;
+    const next = page + 1;
+    nav += '<table style="border: 1px solid gray" ><tr><td style="white-space: nowrap;">';
+    nav += prev >= 0 ? `<a rel="prev" href="pixmicat.php?res=${resno}&amp;page_num=${prev}">${t("prev_page")}</a>` : t("first_page");
+    nav += "</td><td>";
+    if (replyCount === 0) {
+      nav += "[<b>0</b>] ";
+    } else {
+      const len = Math.ceil(replyCount / rePageDef);
+      for (let i = 0; i < len; i += 1) {
+        nav += !all && page === i ? `[<b>${i}</b>] ` : `[<a href="pixmicat.php?res=${resno}&amp;page_num=${i}">${i}</a>] `;
+      }
+      nav += all ? "[<b>ALL</b>] " : replyCount > rePageDef ? `[<a href="pixmicat.php?res=${resno}&amp;page_num=all">ALL</a>] ` : "";
+    }
+    nav += '</td><td style="white-space: nowrap;">';
+    nav += !all && replyCount > next * rePageDef ? `<a href="pixmicat.php?res=${resno}&amp;page_num=${next}">${t("next_page")}</a>` : t("last_page");
+    nav += "</td></tr></table>\n";
+  }
+  nav += '<br style="clear: left;" />\n</div>';
+  return nav;
 }
 
 function renderPageNav(page: number, threadCount: number, pageDef: number): string {
@@ -145,6 +198,18 @@ function normalizePage(page: number, threadCount: number, pageDef: number): numb
   if (threadCount === 0) return 0;
   const maxPage = Math.max(Math.ceil(threadCount / pageDef) - 1, 0);
   return Math.min(page, maxPage);
+}
+
+function normalizeReplyPage(page: ThreadOptions["page"], replyCount: number, rePageDef: number): number {
+  if (page === "all" || rePageDef === 0) return 0;
+  const maxPage = Math.max(Math.ceil(replyCount / rePageDef) - 1, 0);
+  if (page === "RE_PAGE_MAX") return maxPage;
+  if (page < 0) return 0;
+  return Math.min(page, maxPage);
+}
+
+function renderErrorPage(title: string, message: string): string {
+  return `${parseBlock("HEADER", { "{$TITLE}": title })}</head><body><div id="error"><div style="text-align: center; font-size: 1.5em; font-weight: bold;"><span style="color: red;">${message}</span><p /><a href="index.htm">${t("return")}</a></div><hr /></div></body></html>`;
 }
 
 function orderThreadPosts(posts: ImglogRow[], treeCut: number[]): ImglogRow[] {
