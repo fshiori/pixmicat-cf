@@ -6,6 +6,7 @@ import { renderAdmin, handleAdminPost } from "../services/admin";
 import { handleUserDelete } from "../services/delete";
 import { handleRegist } from "../services/posting";
 import { renderCategory, renderSearch } from "../services/search";
+import { renderModuleLoaded, renderStatus } from "../services/status";
 import { renderShell } from "../templates/page";
 
 export function registerPixmicatRoutes(app: Hono<AppContext>): void {
@@ -30,6 +31,12 @@ export function registerPixmicatRoutes(app: Hono<AppContext>): void {
     }
     if (mode === "category") {
       return renderCategory(c.req.raw, c.env);
+    }
+    if (mode === "status") {
+      return renderStatus(c.env);
+    }
+    if (mode === "moduleloaded") {
+      return renderModuleLoaded();
     }
 
     return htmlResponse(

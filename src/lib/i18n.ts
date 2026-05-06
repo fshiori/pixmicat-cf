@@ -66,6 +66,16 @@ const zhTw: Record<string, string> = {
   category_nokeyword: "請輸入類別標籤以搜尋類似文章。",
   category_notfound: "沒有符合此類別標籤的文章",
   category_recache: "重新快取"
+  ,module_info_top: "模組資訊",
+  module_loaded: "Module Loaded:",
+  module_info: "Module Information:",
+  info_top: "系統資訊",
+  info_basic: "基本設定",
+  info_basic_ver: "程式版本",
+  info_basic_pio: "PIO 函式庫後端及版本",
+  info_basic_threadcount: "目前總討論串篇數",
+  info_basic_threads: "篇",
+  info_dsusage_count: "目前筆數"
 };
 
 export function t(key: string, ...args: Array<string | number>): string {
