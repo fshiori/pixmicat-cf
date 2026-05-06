@@ -28,10 +28,12 @@
 | `pixmicat.php::usrdel` | 使用者刪文、只刪圖、密碼/cookie/host/admin 權限 | `routes/delete.ts` + `services/delete.ts`；D1 刪資料、R2 刪物件 | M |
 | `pixmicat.php::valid` | 管理員登入、選單、logout | `routes/admin.ts` + `services/session.ts`；簽章 cookie + KV session | M |
 | `pixmicat.php::admindel` | 管理文章列表、刪文、只刪圖、停止回應 TS flag | `routes/admin.ts` + `services/admin.ts`；沿用表格 HTML | L |
+| `pixmicat.php admin=optimize/check/repair/export` | PIO 維護動作 | D1 無完整等價；`optimize` 可對應 `PRAGMA optimize`，`check/repair/export` 第一輪以不支援訊息忠實回應 | S |
 | `pixmicat.php::search` | 搜尋表單、com/name/sub/no 搜尋、AND/OR | `routes/search.ts` + D1 `LIKE` 查詢，沿用 `SEARCHRESULT` block | M |
 | `pixmicat.php::searchCategory` | 類別模式、session 快取、分頁 | `routes/category.ts`；類別結果放 KV 短期快取取代 PHP session serialize | M |
 | `pixmicat.php::showstatus` | 系統資訊、文章數、儲存量、縮圖支援狀態 | `routes/status.ts`；依 Workers/D1/R2 顯示對應資訊 | M |
-| `pixmicat.php::listModules` / `mode=module` | PHP module loader 與 module page | 本次不實作任意 PHP module 載入；保留 `moduleloaded` 為空清單/不支援頁 | S |
+| `pixmicat.php::listModules` / `mode=module` | PHP module loader 與 module page | 本次不實作任意 PHP module 載入；保留 `moduleloaded` 為空清單/不支援頁，`mode=module` 回 404 parity | S |
+| `pixmicat.php?mode=remake` | 重新產生靜態頁後導回首頁 | Worker 不產生實體 HTML；改為清除/重建 KV HTML cache 後 302 導回首頁 | S |
 | `default.php` | 初始目錄建立與導向 | Workers 不需要檔案目錄初始化；README 說明 D1/KV/R2 初始化 | S |
 | `lib/lib_common.php` | head/form/foot、清理字串、auto link、quote、admin auth、IP 判定 | `lib/common.ts` + `templates/page.ts` + `services/session.ts` | L |
 | `lib/lib_pte.php` | Template block parser | `templates/pte.ts`，讀取移植後 `.tpl` 或 TS 字串 | M |
@@ -79,6 +81,10 @@ PHP 預設 SQLite3 PIO 會建立 `imglog`，欄位如下。D1 schema 會保留�
 - `idx_imglog_time` on `(time)`
 - `idx_imglog_resto_no` on `(resto, no)`
 - `idx_imglog_root_no` on `(root DESC, no DESC)` 用於 thread listing。
+
+初始資料：
+
+- PHP `pio.sqlite3.php` 會插入一筆 `no=1`、`time=1111111111`、`tim=1111111111111`、預設匿名/無標題/無內文的初始文章；D1 migration 也要 seed 同等資料，確保乾淨 DB 啟動後的行為與參考版一致。
 
 額外 D1 tables：
 
@@ -150,10 +156,15 @@ PHP 預設 SQLite3 PIO 會建立 `imglog`，欄位如下。D1 schema 會保留�
 | `GET|POST /pixmicat.php?mode=admin` | `GET|POST /pixmicat.php` | admin login/menu。 |
 | `GET|POST /pixmicat.php?mode=admin&admin=del` | `GET|POST /pixmicat.php` | admin post management。 |
 | `GET /pixmicat.php?mode=admin&admin=logout` | `GET /pixmicat.php` | 清 KV session + cookie。 |
+| `GET|POST /pixmicat.php?mode=admin&admin=optimize` | `GET|POST /pixmicat.php` | D1 `PRAGMA optimize` 或顯示不支援訊息。 |
+| `GET|POST /pixmicat.php?mode=admin&admin=check` | `GET|POST /pixmicat.php` | 第一輪顯示 PHP 相同語意的不支援訊息。 |
+| `GET|POST /pixmicat.php?mode=admin&admin=repair` | `GET|POST /pixmicat.php` | 第一輪顯示 PHP 相同語意的不支援訊息。 |
+| `GET|POST /pixmicat.php?mode=admin&admin=export` | `GET|POST /pixmicat.php` | 第一輪顯示 PHP 相同語意的不支援訊息；完整 PIO export 延後。 |
 | `GET|POST /pixmicat.php?mode=search` | `GET|POST /pixmicat.php` | 搜尋表單/結果。 |
 | `GET /pixmicat.php?mode=category&c=TAG&p=N` | `GET /pixmicat.php` | 目錄/類別模式。 |
 | `GET /pixmicat.php?mode=status` | `GET /pixmicat.php` | 系統資訊。 |
 | `GET /pixmicat.php?mode=moduleloaded` | `GET /pixmicat.php` | 顯示 no-op module 清單與不支援說明。 |
+| `GET /pixmicat.php?mode=module&load=NAME` | `GET /pixmicat.php` | 任意 PHP module 不支援，回 404 parity。 |
 | `GET /mainstyle.css`, `/mainscript.js`, `/iedivfix.js`, `/nothumb.gif` | Static Assets | 原檔直出。 |
 | `GET /src/:key`, `/thumb/:key` 或 `/r2/:key` | `GET /src/:key`, `GET /thumb/:key` | Worker 讀 R2 回應，URL 盡量對齊 PHP `src/` / `thumb/`。 |
 
@@ -193,13 +204,14 @@ Cloudflare 對應：
 
 1. 原封不動沿用 `mainstyle.css`、`mainscript.js`、`iedivfix.js`、`nothumb.gif`。
 2. 預設 theme 只移植 `inc_pixmicat.tpl`，保留 `THREAD`、`REPLY`、`SEARCHRESULT`、`DELFORM`、`MAIN` 等 block。
-3. 版面 helper 對應 PHP：
+3. PTE parser 需支援 PHP `lib_pte.php` 的三種語法：`<!--&BLOCK-->...<!--/&BLOCK-->` block、`<!--&IF($VAR,'true','false')-->` / `<!--&IF(&BLOCK,'true','false')-->` 條件、`<!--&BLOCK/-->` block include；`FOREACH` 雖預設 theme 少用，仍在 parser 測試中保留。
+4. 版面 helper 對應 PHP：
    - `head()` → `templates/page.ts::renderHead`
    - `form()` → `templates/form.ts::renderPostForm`
    - `foot()` → `templates/page.ts::renderFoot`
    - `arrangeThread()` → `templates/thread.ts::renderThread`
-4. HTML 結構優先於 TypeScript 美觀；若 PHP 有不尋常輸出，照樣移植並加 `// PARITY:` 註解。
-5. 若本機有 PHP 可執行，後續用參考版產出的首頁/討論串 HTML 與 Worker HTML 做結構 diff；若無 PHP，至少以 snapshot 測試驗證關鍵 class/id/tag 順序。
+5. HTML 結構優先於 TypeScript 美觀；若 PHP 有不尋常輸出，照樣移植並加 `// PARITY:` 註解。
+6. 若本機有 PHP 可執行，後續用參考版產出的首頁/討論串 HTML 與 Worker HTML 做結構 diff；若無 PHP，至少以 snapshot 測試驗證關鍵 class/id/tag 順序。
 
 ## 實作階段與分支/Checkpoint
 
@@ -233,6 +245,7 @@ Cloudflare 對應：
 - `inc_pixmicat-festival.tpl`、`inc_pixmicat-uploader.tpl` 多 theme 切換。
 - `Utilities/*` 資料轉換工具完整移植。
 - PIO 匯入/匯出中介格式完整支援。
+- `admin=check/repair/export` 的完整資料庫維護/匯出能力；第一輪只保留路由與不支援回應 parity。
 - DNSBL 遠端查詢；初期只保留 BAN/BAD_STRING/BAD_FILEMD5 結構與本地檢查。
 - Cloudflare Images 方案。
 - RSS、Ajax polling、sticky、locked UI 以外的新功能；PHP 版預設未啟用或屬 module 者不主動加入。
