@@ -2,6 +2,8 @@ import type { Hono } from "hono";
 import type { AppContext } from "../types/env";
 import { htmlResponse } from "../lib/html";
 import { renderBoardIndex, renderThreadView } from "../services/board";
+import { renderAdmin, handleAdminPost } from "../services/admin";
+import { handleUserDelete } from "../services/delete";
 import { handleRegist } from "../services/posting";
 import { renderShell } from "../templates/page";
 
@@ -18,6 +20,9 @@ export function registerPixmicatRoutes(app: Hono<AppContext>): void {
     if (!mode && !res) {
       const page = pageNum ? Number.parseInt(pageNum, 10) : 0;
       return htmlResponse(await renderBoardIndex(c.env, { page }));
+    }
+    if (mode === "admin") {
+      return renderAdmin(c.req.raw, c.env);
     }
 
     return htmlResponse(
@@ -37,6 +42,12 @@ export function registerPixmicatRoutes(app: Hono<AppContext>): void {
     if (mode === "regist") {
       const result = await handleRegist(c.req.raw, c.env);
       return htmlResponse(result.html, { status: result.status, headers: result.headers });
+    }
+    if (mode === "usrdel") {
+      return handleUserDelete(c.req.raw, c.env);
+    }
+    if (mode === "admin") {
+      return handleAdminPost(c.req.raw, c.env);
     }
 
     return htmlResponse(

@@ -89,4 +89,27 @@ export class PioD1 {
 
     return Number(result.meta.last_row_id);
   }
+
+  async removePosts(posts: number[]): Promise<ImglogRow[]> {
+    if (posts.length === 0) return [];
+    const files = await this.fetchPostsAndReplies(posts);
+    const placeholders = posts.map(() => "?").join(",");
+    await this.db.prepare(`DELETE FROM imglog WHERE no IN (${placeholders}) OR resto IN (${placeholders})`).bind(...posts, ...posts).run();
+    return files.filter((post) => post.ext);
+  }
+
+  async removeAttachments(posts: number[], recursive = false): Promise<ImglogRow[]> {
+    if (posts.length === 0) return [];
+    const placeholders = posts.map(() => "?").join(",");
+    const where = recursive ? `no IN (${placeholders}) OR resto IN (${placeholders})` : `no IN (${placeholders})`;
+    const bind = recursive ? [...posts, ...posts] : posts;
+    const result = await this.db.prepare(`SELECT * FROM imglog WHERE (${where}) AND ext <> ''`).bind(...bind).all<ImglogRow>();
+    return result.results;
+  }
+
+  async fetchPostsAndReplies(posts: number[]): Promise<ImglogRow[]> {
+    const placeholders = posts.map(() => "?").join(",");
+    const result = await this.db.prepare(`SELECT * FROM imglog WHERE no IN (${placeholders}) OR resto IN (${placeholders})`).bind(...posts, ...posts).all<ImglogRow>();
+    return result.results;
+  }
 }
