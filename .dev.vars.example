@@ -1,0 +1,2 @@
+SESSION_SECRET=replace-with-a-long-random-secret
+ADMIN_HASH=TO-BE-COMPUTED-BY-GENHASH

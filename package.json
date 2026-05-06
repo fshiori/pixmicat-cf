@@ -1,0 +1,29 @@
+{
+  "name": "pixmicat-cf",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pixmicat! 8th.Release.4 for Cloudflare Workers",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --local --port 8787",
+    "type-check": "tsc --noEmit",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "d1:migrate:local": "wrangler d1 migrations apply pixmicat-db --local",
+    "d1:migrate": "wrangler d1 migrations apply pixmicat-db --remote",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "hono": "^4.6.14",
+    "kysely": "^0.28.17"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241205.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8",
+    "wrangler": "^4.18.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
