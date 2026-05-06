@@ -23,5 +23,13 @@ node_modules/
 dist/
 .wrangler/
 .dev.vars
+.env
 *.log
 coverage/
+
+# Local deployment parameters. Keep real Cloudflare account IDs, resource IDs,
+# domains, and tokens out of the open source repository.
+deploy/*.env
+deploy/*.local.toml
+deploy/*.local.json
+!deploy/*.example.env
