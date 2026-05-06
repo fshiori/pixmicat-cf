@@ -2,6 +2,7 @@ import { PioD1 } from "../db/pio";
 import { getConfig, getNumberConfig } from "../lib/config";
 import { cleanStr, escapeHtml } from "../lib/html";
 import { md5Hex, postPasswordHash } from "../lib/hash";
+import { getCookie } from "./session";
 import { decodeImage, encodeJpeg, resizeNearest } from "./thumbnail";
 
 type PostResult = {
@@ -52,6 +53,7 @@ export async function handleRegist(request: Request, env: Env): Promise<PostResu
   const defaultTitle = await getConfig(env, "DEFAULT_NOTITLE", "無標題");
   const defaultComment = await getConfig(env, "DEFAULT_NOCOMMENT", "無內文");
   const allowExt = (await getConfig(env, "ALLOW_UPLOAD_EXT", "GIF|JPG|JPEG|PNG|BMP|SWF")).toLowerCase().split("|");
+  const badStrings = await loadBanPatterns(env, ["BAD_STRING", "bad_string"]);
 
   let name = cleanStr(String(form.get("bvUFbdrIC") ?? ""));
   let email = cleanStr(String(form.get("ObHGyhdTR") ?? ""));
@@ -64,11 +66,13 @@ export async function handleRegist(request: Request, env: Env): Promise<PostResu
   const file = form.get("upfile");
   const uploadFile = isFileLike(file) && file.size > 0 ? file : null;
 
+  if (hasBannedWord(badStrings, [name, email, sub, com])) return error("發出的文章中有被管理員列為限制的字句，送出失敗", 400);
   if (name.length > inputMax) return error("名稱過長", 400);
   if (email.length > inputMax) return error("E-mail過長", 400);
   if (sub.length > inputMax) return error("標題過長", 400);
   if (com.length > commMax) return error("內文過長", 400);
   if (resto && !(await pio.isThread(resto))) return error("欲回應之文章並不存在！", 404);
+  if (resto && (await pio.isThreadLocked(resto))) return error("這篇討論串已被管理員標記為禁止回應！", 403);
 
   const hasUpload = uploadFile !== null;
   if (!resto && !hasUpload && !form.get("noimg")) {
@@ -85,12 +89,19 @@ export async function handleRegist(request: Request, env: Env): Promise<PostResu
   const tim = `${nowSeconds}${String(Date.now()).slice(-3)}`;
   const remote = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
   const now = await formatNow(env, nowSeconds, remote);
+  const passCookie = await postPasswordHash(getCookie(request, "pwdc") || "");
+  const renzoku = await getNumberConfig(env, "RENZOKU", 60);
+  const renzokuImage = await getNumberConfig(env, "RENZOKU2", 60);
+  if (await pio.isSuccessivePost(nowSeconds, com, pass, passCookie, remote, hasUpload, renzoku, renzokuImage)) {
+    return error("連續投稿請稍候一段時間", 400);
+  }
+
   let image: ImageInfo = { tim, ext: "", width: 0, height: 0, thumbWidth: 0, thumbHeight: 0, sizeText: "", md5: "" };
 
   if (hasUpload) {
     if (uploadFile.size > maxKb * 1024) return error("上傳失敗<br />上傳的附加圖檔容量超過上傳容量限制", 400);
     try {
-      image = await validateAndStoreImage(env, uploadFile, tim, allowExt, resto > 0);
+      image = await validateAndStoreImage(env, pio, uploadFile, tim, allowExt, resto > 0);
     } catch (err) {
       return error(err instanceof Error ? err.message : "附加圖檔為系統不支援的格式", 400);
     }
@@ -130,12 +141,17 @@ function isFileLike(value: unknown): value is UploadFile {
   return typeof value === "object" && value !== null && "size" in value && "name" in value && "arrayBuffer" in value;
 }
 
-async function validateAndStoreImage(env: Env, file: UploadFile, tim: string, allowExt: string[], isReply: boolean): Promise<ImageInfo> {
+async function validateAndStoreImage(env: Env, pio: PioD1, file: UploadFile, tim: string, allowExt: string[], isReply: boolean): Promise<ImageInfo> {
   const buffer = await file.arrayBuffer();
   const info = readImageInfo(buffer, file.name);
   if (!allowExt.includes(info.ext.slice(1).toLowerCase())) {
     throw new Error("附加圖檔為系統不支援的格式");
   }
+  const md5 = await md5Hex(buffer);
+  const badFileMd5 = await loadBanPatterns(env, ["BAD_FILEMD5", "bad_filemd5"]);
+  if (badFileMd5.includes(md5)) throw new Error("上傳失敗<br />此附加圖檔被管理員列為禁止上傳");
+  if (await pio.isDuplicateAttachment(env, md5)) throw new Error("上傳失敗<br />近期已經有相同的附加圖檔");
+
   await env.R2.put(`${tim}${info.ext}`, buffer, {
     httpMetadata: { contentType: file.type || mimeFromExt(info.ext) }
   });
@@ -154,10 +170,20 @@ async function validateAndStoreImage(env: Env, file: UploadFile, tim: string, al
     width: info.width,
     height: info.height,
     sizeText: formatFileSize(file.size),
-    md5: await md5Hex(buffer),
+    md5,
     thumbWidth: thumbSize.width,
     thumbHeight: thumbSize.height
   };
+}
+
+async function loadBanPatterns(env: Env, types: string[]): Promise<string[]> {
+  const placeholders = types.map(() => "?").join(",");
+  const result = await env.DB.prepare(`SELECT pattern FROM banlist WHERE type IN (${placeholders}) AND (expires_at = 0 OR expires_at > unixepoch())`).bind(...types).all<{ pattern: string }>();
+  return result.results.map((row) => row.pattern).filter(Boolean);
+}
+
+function hasBannedWord(patterns: string[], values: string[]): boolean {
+  return patterns.some((pattern) => values.some((value) => value.includes(pattern)));
 }
 
 function calculateThumbSize(width: number, height: number, isReply: boolean): { width: number; height: number } {

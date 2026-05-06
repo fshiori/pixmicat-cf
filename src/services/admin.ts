@@ -30,10 +30,15 @@ export async function handleAdminPost(request: Request, env: Env): Promise<Respo
 
   if (adminMode === "del") {
     const selected = selectedPostNos(form);
+    const stopSelected = selectedThreadStopNos(form);
     if (selected.length > 0 && form.get("func") === "delete") {
       const pio = new PioD1(env.DB);
       const filePosts = form.get("onlyimgdel") === "on" ? await pio.removeAttachments(selected, true) : await pio.removePosts(selected);
       await deleteR2Files(env, filePosts);
+    }
+    if (stopSelected.length > 0) {
+      const pio = new PioD1(env.DB);
+      await Promise.all(stopSelected.map((no) => pio.toggleThreadStop(no)));
     }
     return html(await adminDeletePage(env));
   }
@@ -48,7 +53,8 @@ async function adminDeletePage(env: Env): Promise<string> {
   const rows = posts
     .map((post, index) => {
       const bg = index % 2 ? "ListRow1_bg" : "ListRow2_bg";
-      return `<tr class="${bg}" align="left"><th style="text-align:center"> </th><th style="text-align:center"> </th><th><input type="checkbox" name="clist[]" value="${post.no}" />${post.no}</th><td><small>${post.now}</small></td><td>${post.sub}</td><td><b>${post.name}</b></td><td><small>${post.com}</small></td><td>${post.host}</td><td style="text-align:center">${post.ext ? `${post.tim}${post.ext}` : "--"}<br />${post.md5chksum || "--"}</td></tr>`;
+      const threadStop = post.resto === 0 ? `<input type="checkbox" name="stop[]" value="${post.no}" />${post.status.split(",").includes("TS") ? t("admin_stop_btn") : ""}` : " ";
+      return `<tr class="${bg}" align="left"><th style="text-align:center"> </th><th style="text-align:center">${threadStop}</th><th><input type="checkbox" name="clist[]" value="${post.no}" />${post.no}</th><td><small>${post.now}</small></td><td>${post.sub}</td><td><b>${post.name}</b></td><td><small>${post.com}</small></td><td>${post.host}</td><td style="text-align:center">${post.ext ? `${post.tim}${post.ext}` : "--"}<br />${post.md5chksum || "--"}</td></tr>`;
     })
     .join("\n");
 
@@ -101,4 +107,10 @@ function html(body: string, headers?: HeadersInit): Response {
 
 function redirect(location: string): Response {
   return new Response("", { status: 302, headers: { location, "set-cookie": "pmc_admin=; Max-Age=0; Path=/; SameSite=Lax" } });
+}
+
+function selectedThreadStopNos(form: FormData): number[] {
+  return form.getAll("stop[]")
+    .map((value) => Number.parseInt(String(value), 10))
+    .filter((value) => Number.isFinite(value));
 }

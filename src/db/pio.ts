@@ -52,6 +52,24 @@ export class PioD1 {
     return Boolean(row);
   }
 
+  async fetchPost(no: number): Promise<ImglogRow | null> {
+    return (await this.db.prepare("SELECT * FROM imglog WHERE no = ?").bind(no).first<ImglogRow>()) ?? null;
+  }
+
+  async isThreadLocked(no: number): Promise<boolean> {
+    const row = await this.db.prepare("SELECT status FROM imglog WHERE no = ? AND resto = 0").bind(no).first<{ status: string }>();
+    return row?.status.split(",").filter(Boolean).includes("TS") ?? false;
+  }
+
+  async toggleThreadStop(no: number): Promise<void> {
+    const post = await this.fetchPost(no);
+    if (!post || post.resto !== 0) return;
+    const flags = new Set(post.status.split(",").filter(Boolean));
+    if (flags.has("TS")) flags.delete("TS");
+    else flags.add("TS");
+    await this.db.prepare("UPDATE imglog SET status = ? WHERE no = ?").bind([...flags].join(","), no).run();
+  }
+
   async addPost(post: NewPost, age: boolean): Promise<number> {
     if (post.resto && age) {
       const now = new Date().toISOString().slice(0, 19).replace("T", " ");
@@ -104,6 +122,7 @@ export class PioD1 {
     const where = recursive ? `no IN (${placeholders}) OR resto IN (${placeholders})` : `no IN (${placeholders})`;
     const bind = recursive ? [...posts, ...posts] : posts;
     const result = await this.db.prepare(`SELECT * FROM imglog WHERE (${where}) AND ext <> ''`).bind(...bind).all<ImglogRow>();
+    await this.db.prepare(`UPDATE imglog SET tim = '', ext = '', imgw = 0, imgh = 0, imgsize = '', tw = 0, th = 0, md5chksum = '' WHERE ${where}`).bind(...bind).run();
     return result.results;
   }
 
@@ -128,5 +147,30 @@ export class PioD1 {
       .bind(`%,${category.toLowerCase()},%`)
       .all<ImglogRow>();
     return result.results;
+  }
+
+  async isSuccessivePost(now: number, com: string, pass: string, passCookie: string, host: string, isUpload: boolean, renzoku: number, renzokuImage: number): Promise<boolean> {
+    if (!renzoku) return false;
+    const minTime = isUpload ? Math.min(now - renzoku, now - renzokuImage) : now - renzoku;
+    const result = await this.db
+      .prepare("SELECT pwd, host, time, com FROM imglog WHERE time > ? OR com = ? ORDER BY no DESC LIMIT 50")
+      .bind(minTime, isUpload ? "" : com)
+      .all<Pick<ImglogRow, "pwd" | "host" | "time" | "com">>();
+
+    for (const post of result.results) {
+      const isTooRecent = post.time > now - renzoku || (isUpload && post.time > now - renzokuImage);
+      const isSameComment = !isUpload && post.com === com;
+      if ((isTooRecent || isSameComment) && (post.host === host || post.pwd === pass || post.pwd === passCookie)) return true;
+    }
+    return false;
+  }
+
+  async isDuplicateAttachment(env: Env, md5hash: string): Promise<boolean> {
+    if (!md5hash) return false;
+    const result = await this.db.prepare("SELECT tim, ext FROM imglog WHERE ext <> '' AND md5chksum = ? ORDER BY no DESC LIMIT 50").bind(md5hash).all<Pick<ImglogRow, "tim" | "ext">>();
+    for (const post of result.results) {
+      if (await env.R2.head(`${post.tim}${post.ext}`)) return true;
+    }
+    return false;
   }
 }

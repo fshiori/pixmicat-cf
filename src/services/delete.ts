@@ -12,8 +12,9 @@ export async function handleUserDelete(request: Request, env: Env): Promise<Resp
   const password = String(form.get("pwd") || getCookie(request, "pwdc") || "");
   const passwordHash = await postPasswordHash(password);
   const admin = await isAdminAuthenticated(request, env);
+  const remote = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
   const posts = await pio.fetchPosts(selected);
-  const allowed = posts.filter((post) => admin || post.pwd === passwordHash).map((post) => post.no);
+  const allowed = posts.filter((post) => admin || post.pwd === passwordHash || post.host === remote).map((post) => post.no);
   if (allowed.length === 0) return htmlMessage("無此文章或是密碼錯誤", 403);
 
   const filePosts = form.get("onlyimgdel") ? await pio.removeAttachments(allowed) : await pio.removePosts(allowed);
