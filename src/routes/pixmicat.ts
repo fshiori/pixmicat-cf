@@ -38,6 +38,12 @@ export function registerPixmicatRoutes(app: Hono<AppContext>): void {
     if (mode === "moduleloaded") {
       return renderModuleLoaded();
     }
+    if (mode === "module") {
+      return new Response("404 Not Found", { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
+    }
+    if (mode === "remake") {
+      return new Response("", { status: 302, headers: { location: `index.htm?${Date.now()}` } });
+    }
 
     return unsupportedMode(c.env, mode || "reply");
   });

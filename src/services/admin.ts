@@ -13,6 +13,9 @@ export async function renderAdmin(request: Request, env: Env): Promise<Response>
   const authenticated = await isAdminAuthenticated(request, env);
   if (!authenticated) return html(adminLoginPage());
   if (url.searchParams.get("admin") === "del") return html(await adminDeletePage(env));
+  if (["optimize", "check", "repair", "export"].includes(url.searchParams.get("admin") || "")) {
+    return html(adminUnsupportedMaintenancePage());
+  }
   return html(adminMenuPage());
 }
 
@@ -41,6 +44,9 @@ export async function handleAdminPost(request: Request, env: Env): Promise<Respo
       await Promise.all(stopSelected.map((no) => pio.toggleThreadStop(no)));
     }
     return html(await adminDeletePage(env));
+  }
+  if (["optimize", "check", "repair", "export"].includes(adminMode)) {
+    return html(adminUnsupportedMaintenancePage());
   }
 
   return html(adminMenuPage());
@@ -95,6 +101,14 @@ function adminMenuPage(): string {
 <input type="submit" value="${t("admin_submit_btn")}" />
 </div>
 </form>`);
+}
+
+function adminUnsupportedMaintenancePage(): string {
+  return shell(`<div id="banner">[<a href="index.htm?${Date.now()}">${t("return")}</a>] [<a href="pixmicat.php?mode=admin&amp;admin=logout">${t("admin_logout")}</a>]<div class="bar_admin">${t("admin_top")}</div></div>
+<div id="admin-check" style="text-align: center;">
+<br />
+D1 maintenance action is not supported in this runtime.
+</div>`);
 }
 
 function shell(body: string): string {
