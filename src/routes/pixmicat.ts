@@ -7,8 +7,10 @@ import { renderShell } from "../templates/page";
 export function registerPixmicatRoutes(app: Hono<AppContext>): void {
   app.get("/pixmicat.php", async (c) => {
     const mode = c.req.query("mode") || "";
+    const pageNum = c.req.query("page_num");
     if (!mode && !c.req.query("res")) {
-      return htmlResponse(await renderBoardIndex(c.env));
+      const page = pageNum ? Number.parseInt(pageNum, 10) : 0;
+      return htmlResponse(await renderBoardIndex(c.env, { page }));
     }
 
     return htmlResponse(
