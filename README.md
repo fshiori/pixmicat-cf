@@ -8,7 +8,7 @@
 - Cloudflare R2 作為原圖與縮圖儲存
 - Workers Static Assets 提供原始 CSS、JS 與 `nothumb.gif`
 
-目前狀態：已完成 scaffold，核心功能會依 `MIGRATION_PLAN.md` 的 checkpoint 逐項移植。
+目前狀態：已完成核心移植，可用 `wrangler dev` 在本機啟動。已實作看板列表、討論串檢視、發文與回應、R2 圖片上傳、JPEG 縮圖產生、管理員登入、刪除、搜尋、目錄模式與狀態頁。
 
 ## 本機開發
 

@@ -39,15 +39,7 @@ export function registerPixmicatRoutes(app: Hono<AppContext>): void {
       return renderModuleLoaded();
     }
 
-    return htmlResponse(
-      renderShell(
-        c.env.TITLE || "Pixmicat!-PIO",
-        `<div id="error"><div style="text-align: center; font-size: 1.5em; font-weight: bold;">
-<span style="color: red;">Mode ${mode || "reply"} is not implemented in scaffold.</span>
-</div><hr /></div>`
-      ),
-      { status: 501 }
-    );
+    return unsupportedMode(c.env, mode || "reply");
   });
 
   app.post("/pixmicat.php", async (c) => {
@@ -67,15 +59,7 @@ export function registerPixmicatRoutes(app: Hono<AppContext>): void {
       return renderSearch(c.req.raw, c.env);
     }
 
-    return htmlResponse(
-      renderShell(
-        c.env.TITLE || "Pixmicat!-PIO",
-        `<div id="error"><div style="text-align: center; font-size: 1.5em; font-weight: bold;">
-<span style="color: red;">Posting routes are not implemented in scaffold.</span>
-</div><hr /></div>`
-      ),
-      { status: 501 }
-    );
+    return unsupportedMode(c.env, mode || "post");
   });
 }
 
@@ -84,4 +68,16 @@ function parseThreadPage(pageNum: string | undefined): number | "RE_PAGE_MAX" | 
   if (pageNum === "all") return "all";
   const parsed = Number.parseInt(pageNum, 10);
   return Number.isFinite(parsed) ? parsed : "RE_PAGE_MAX";
+}
+
+function unsupportedMode(env: Env, mode: string): Response {
+  return htmlResponse(
+    renderShell(
+      env.TITLE || "Pixmicat!-PIO",
+      `<div id="error"><div style="text-align: center; font-size: 1.5em; font-weight: bold;">
+<span style="color: red;">不支援的操作模式：${mode}</span>
+</div><hr /></div>`
+    ),
+    { status: 404 }
+  );
 }
