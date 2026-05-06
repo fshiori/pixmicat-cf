@@ -18,3 +18,10 @@
 
 # End of https://www.toptal.com/developers/gitignore/api/linux
 ref/*
+
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+*.log
+coverage/
