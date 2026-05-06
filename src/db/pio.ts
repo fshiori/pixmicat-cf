@@ -44,4 +44,9 @@ export class PioD1 {
       .all<ImglogRow>();
     return result.results;
   }
+
+  async isThread(no: number): Promise<boolean> {
+    const row = await this.db.prepare("SELECT no FROM imglog WHERE no = ? AND resto = 0").bind(no).first<{ no: number }>();
+    return Boolean(row);
+  }
 }
