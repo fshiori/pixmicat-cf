@@ -75,7 +75,13 @@ const zhTw: Record<string, string> = {
   info_basic_pio: "PIO 函式庫後端及版本",
   info_basic_threadcount: "目前總討論串篇數",
   info_basic_threads: "篇",
-  info_dsusage_count: "目前筆數"
+  info_dsusage_count: "目前筆數",
+  admin: "管理",
+  deletor: "刪除",
+  trip_pre: "◆",
+  trip_pre_fake: "◇",
+  cap_char: "★",
+  cap_char_fake: "☆"
 };
 
 export function t(key: string, ...args: Array<string | number>): string {
