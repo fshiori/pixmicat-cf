@@ -1,5 +1,7 @@
 import type { ImglogRow } from "./schema";
 
+type NewPost = Omit<ImglogRow, "no">;
+
 export class PioD1 {
   constructor(private readonly db: D1Database) {}
 
@@ -48,5 +50,43 @@ export class PioD1 {
   async isThread(no: number): Promise<boolean> {
     const row = await this.db.prepare("SELECT no FROM imglog WHERE no = ? AND resto = 0").bind(no).first<{ no: number }>();
     return Boolean(row);
+  }
+
+  async addPost(post: NewPost, age: boolean): Promise<number> {
+    if (post.resto && age) {
+      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      await this.db.prepare("UPDATE imglog SET root = ? WHERE no = ?").bind(now, post.resto).run();
+    }
+
+    const result = await this.db
+      .prepare(
+        `INSERT INTO imglog (resto,root,time,md5chksum,category,tim,ext,imgw,imgh,imgsize,tw,th,pwd,now,name,email,sub,com,host,status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .bind(
+        post.resto,
+        post.root,
+        post.time,
+        post.md5chksum,
+        post.category,
+        post.tim,
+        post.ext,
+        post.imgw,
+        post.imgh,
+        post.imgsize,
+        post.tw,
+        post.th,
+        post.pwd,
+        post.now,
+        post.name,
+        post.email,
+        post.sub,
+        post.com,
+        post.host,
+        post.status
+      )
+      .run();
+
+    return Number(result.meta.last_row_id);
   }
 }
