@@ -41,6 +41,15 @@ const zhTw: Record<string, string> = {
   form_notice_noscript: "＊您選擇關閉了JavaScript，但這對您的瀏覽及發文應無巨大影響",
   js_convert_sakura: "偵測到您有輸入櫻花日文假名的可能性，將自動為您轉換",
   return: "回到版面"
+  ,admin_top: "管理模式",
+  admin_logout: "登出",
+  admin_manageposts: "管理文章",
+  admin_verify_btn: " 認證 ",
+  admin_submit_btn: " 執行 ",
+  admin_reset_btn: " 重置 ",
+  admin_delete: "刪除文章",
+  admin_notices: "<ul><li>想刪除文章，請勾選該文章前之「刪除」核取框之後按下執行按鈕</li><li>只想刪除文章的附加圖檔，請先勾選「僅刪除附加圖檔」再按照一般刪文方式</li></ul>",
+  admin_list_header: "<th>功能</th><th>停止</th><th>刪除</th><th>投稿日</th><th>標題</th><th>名稱</th><th>內文</th><th>主機位置名稱</th><th>附加圖檔 (Bytes)<br />MD5 檢查碼</th>"
 };
 
 export function t(key: string, ...args: Array<string | number>): string {
