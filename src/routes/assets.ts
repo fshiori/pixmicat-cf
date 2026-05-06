@@ -3,7 +3,7 @@ import type { AppContext } from "../types/env";
 import { resolveImageKey } from "../services/image";
 
 export function registerAssetRoutes(app: Hono<AppContext>): void {
-  app.get("/src/:key{.+}", async (c) => {
+  app.get("/src/*", async (c) => {
     const key = resolveImageKey(c.req.path);
     if (!key) return c.notFound();
 
@@ -16,7 +16,7 @@ export function registerAssetRoutes(app: Hono<AppContext>): void {
     return new Response(object.body, { headers });
   });
 
-  app.get("/thumb/:key{.+}", async (c) => {
+  app.get("/thumb/*", async (c) => {
     const key = resolveImageKey(c.req.path);
     if (!key) return c.notFound();
 
