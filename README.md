@@ -45,13 +45,21 @@ npm run dev
 
 ## Cloudflare 資源設定
 
+正式部署參數不要寫入可提交的 `wrangler.toml`。請先複製本機部署設定樣板，實際 Account ID、正式網域、D1/KV/R2 ID 與資源名稱只填在被 `.gitignore` 排除的檔案：
+
+```bash
+cp deploy/production.example.env deploy/production.env
+```
+
+`wrangler.toml` 只保留開源專案可提交的 placeholder；若要針對正式環境產生實際設定，請使用本機的 `deploy/production.env` 作為來源，不要把個人 Cloudflare 資訊 commit 進 repo。
+
 建立 D1 database：
 
 ```bash
 wrangler d1 create pixmicat-db
 ```
 
-把輸出的 `database_id` 填回 `wrangler.toml` 的 `[[d1_databases]]`。
+把輸出的 `database_id` 填到本機 `deploy/production.env` 的 `D1_DATABASE_ID`，不要填回可提交的 `wrangler.toml`。
 
 建立 KV namespace：
 
@@ -59,7 +67,7 @@ wrangler d1 create pixmicat-db
 wrangler kv namespace create pixmicat-kv
 ```
 
-把輸出的 `id` 填回 `wrangler.toml` 的 `[[kv_namespaces]]`。
+把輸出的 `id` 填到本機 `deploy/production.env` 的 `KV_NAMESPACE_ID`，不要填回可提交的 `wrangler.toml`。
 
 建立 R2 bucket：
 
@@ -67,7 +75,7 @@ wrangler kv namespace create pixmicat-kv
 wrangler r2 bucket create pixmicat-assets
 ```
 
-`wrangler.toml` 已將 R2 binding 設為 `R2`。
+把 bucket 名稱填到本機 `deploy/production.env` 的 `R2_BUCKET_NAME`。`wrangler.toml` 只保留 `R2` binding 的 placeholder。
 
 ## D1 Migration
 
@@ -115,6 +123,13 @@ npm run dev
 
 ```bash
 npm run deploy
+```
+
+正式 secrets 請透過 Wrangler 設定，不要寫入 repo：
+
+```bash
+wrangler secret put SESSION_SECRET
+wrangler secret put ADMIN_HASH
 ```
 
 ## 專案結構
