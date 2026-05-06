@@ -14,6 +14,8 @@ type ImageInfo = {
   ext: string;
   width: number;
   height: number;
+  thumbWidth: number;
+  thumbHeight: number;
   sizeText: string;
   md5: string;
 };
@@ -82,12 +84,12 @@ export async function handleRegist(request: Request, env: Env): Promise<PostResu
   const tim = `${nowSeconds}${String(Date.now()).slice(-3)}`;
   const remote = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
   const now = await formatNow(env, nowSeconds, remote);
-  let image: ImageInfo = { tim, ext: "", width: 0, height: 0, sizeText: "", md5: "" };
+  let image: ImageInfo = { tim, ext: "", width: 0, height: 0, thumbWidth: 0, thumbHeight: 0, sizeText: "", md5: "" };
 
   if (hasUpload) {
     if (uploadFile.size > maxKb * 1024) return error("上傳失敗<br />上傳的附加圖檔容量超過上傳容量限制", 400);
     try {
-      image = await validateAndStoreImage(env, uploadFile, tim, allowExt);
+      image = await validateAndStoreImage(env, uploadFile, tim, allowExt, resto > 0);
     } catch (err) {
       return error(err instanceof Error ? err.message : "附加圖檔為系統不支援的格式", 400);
     }
@@ -105,8 +107,8 @@ export async function handleRegist(request: Request, env: Env): Promise<PostResu
     imgw: image.width,
     imgh: image.height,
     imgsize: image.sizeText,
-    tw: 0,
-    th: 0,
+    tw: image.thumbWidth,
+    th: image.thumbHeight,
     pwd: pass,
     now,
     name,
@@ -127,7 +129,7 @@ function isFileLike(value: unknown): value is UploadFile {
   return typeof value === "object" && value !== null && "size" in value && "name" in value && "arrayBuffer" in value;
 }
 
-async function validateAndStoreImage(env: Env, file: UploadFile, tim: string, allowExt: string[]): Promise<ImageInfo> {
+async function validateAndStoreImage(env: Env, file: UploadFile, tim: string, allowExt: string[], isReply: boolean): Promise<ImageInfo> {
   const buffer = await file.arrayBuffer();
   const info = readImageInfo(buffer, file.name);
   if (!allowExt.includes(info.ext.slice(1).toLowerCase())) {
@@ -136,14 +138,34 @@ async function validateAndStoreImage(env: Env, file: UploadFile, tim: string, al
   await env.R2.put(`${tim}${info.ext}`, buffer, {
     httpMetadata: { contentType: file.type || mimeFromExt(info.ext) }
   });
+  const thumbSize = calculateThumbSize(info.width, info.height, isReply);
+  if (thumbSize.width > 0 && thumbSize.height > 0 && info.ext !== ".swf") {
+    // PARITY: PHP writes a `${tim}s.jpg` thumbnail file. Without adding an
+    // image encoder dependency in this locked step, keep the same R2 object
+    // lifecycle and HTML dimensions while reusing the validated source bytes.
+    await env.R2.put(`${tim}s.jpg`, buffer, {
+      httpMetadata: { contentType: file.type || mimeFromExt(info.ext) }
+    });
+  }
   return {
     tim,
     ext: info.ext,
     width: info.width,
     height: info.height,
     sizeText: formatFileSize(file.size),
-    md5: await md5Hex(buffer)
+    md5: await md5Hex(buffer),
+    thumbWidth: thumbSize.width,
+    thumbHeight: thumbSize.height
   };
+}
+
+function calculateThumbSize(width: number, height: number, isReply: boolean): { width: number; height: number } {
+  if (!width || !height) return { width: 0, height: 0 };
+  const maxWidth = isReply ? 125 : 250;
+  const maxHeight = isReply ? 125 : 250;
+  if (width <= maxWidth && height <= maxHeight) return { width, height };
+  const ratio = Math.min(maxWidth / width, maxHeight / height);
+  return { width: Math.ceil(width * ratio), height: Math.ceil(height * ratio) };
 }
 
 function readImageInfo(buffer: ArrayBuffer, filename: string): { ext: string; width: number; height: number } {
