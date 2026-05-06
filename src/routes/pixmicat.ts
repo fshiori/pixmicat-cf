@@ -2,6 +2,7 @@ import type { Hono } from "hono";
 import type { AppContext } from "../types/env";
 import { htmlResponse } from "../lib/html";
 import { renderBoardIndex, renderThreadView } from "../services/board";
+import { handleRegist } from "../services/posting";
 import { renderShell } from "../templates/page";
 
 export function registerPixmicatRoutes(app: Hono<AppContext>): void {
@@ -30,7 +31,14 @@ export function registerPixmicatRoutes(app: Hono<AppContext>): void {
     );
   });
 
-  app.post("/pixmicat.php", (c) => {
+  app.post("/pixmicat.php", async (c) => {
+    const form = await c.req.raw.clone().formData();
+    const mode = String(form.get("mode") ?? "");
+    if (mode === "regist") {
+      const result = await handleRegist(c.req.raw, c.env);
+      return htmlResponse(result.html, { status: result.status, headers: result.headers });
+    }
+
     return htmlResponse(
       renderShell(
         c.env.TITLE || "Pixmicat!-PIO",

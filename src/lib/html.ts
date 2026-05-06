@@ -12,3 +12,7 @@ export function htmlResponse(body: string, init: ResponseInit = {}): Response {
   headers.set("content-type", "text/html; charset=utf-8");
   return new Response(body, { ...init, headers });
 }
+
+export function cleanStr(value: string): string {
+  return escapeHtml(value.trim()).replaceAll("\r\n", "").replaceAll("\r", "").replaceAll("\n", "");
+}
