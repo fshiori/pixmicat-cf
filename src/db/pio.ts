@@ -112,4 +112,21 @@ export class PioD1 {
     const result = await this.db.prepare(`SELECT * FROM imglog WHERE no IN (${placeholders}) OR resto IN (${placeholders})`).bind(...posts, ...posts).all<ImglogRow>();
     return result.results;
   }
+
+  async searchPost(keywords: string[], field: "com" | "name" | "sub" | "no", method: "AND" | "OR"): Promise<ImglogRow[]> {
+    if (keywords.length === 0) return [];
+    const column = field === "no" ? "CAST(no AS TEXT)" : field;
+    const clauses = keywords.map(() => `${column} LIKE ?`).join(` ${method} `);
+    const binds = keywords.map((keyword) => `%${keyword}%`);
+    const result = await this.db.prepare(`SELECT * FROM imglog WHERE ${clauses} ORDER BY no DESC`).bind(...binds).all<ImglogRow>();
+    return result.results;
+  }
+
+  async searchCategory(category: string): Promise<ImglogRow[]> {
+    const result = await this.db
+      .prepare("SELECT * FROM imglog WHERE lower(category) LIKE ? ORDER BY no DESC")
+      .bind(`%,${category.toLowerCase()},%`)
+      .all<ImglogRow>();
+    return result.results;
+  }
 }

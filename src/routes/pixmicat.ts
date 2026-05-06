@@ -5,6 +5,7 @@ import { renderBoardIndex, renderThreadView } from "../services/board";
 import { renderAdmin, handleAdminPost } from "../services/admin";
 import { handleUserDelete } from "../services/delete";
 import { handleRegist } from "../services/posting";
+import { renderCategory, renderSearch } from "../services/search";
 import { renderShell } from "../templates/page";
 
 export function registerPixmicatRoutes(app: Hono<AppContext>): void {
@@ -23,6 +24,12 @@ export function registerPixmicatRoutes(app: Hono<AppContext>): void {
     }
     if (mode === "admin") {
       return renderAdmin(c.req.raw, c.env);
+    }
+    if (mode === "search") {
+      return renderSearch(c.req.raw, c.env);
+    }
+    if (mode === "category") {
+      return renderCategory(c.req.raw, c.env);
     }
 
     return htmlResponse(
@@ -48,6 +55,9 @@ export function registerPixmicatRoutes(app: Hono<AppContext>): void {
     }
     if (mode === "admin") {
       return handleAdminPost(c.req.raw, c.env);
+    }
+    if (mode === "search") {
+      return renderSearch(c.req.raw, c.env);
     }
 
     return htmlResponse(
