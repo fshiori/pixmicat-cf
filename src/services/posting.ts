@@ -2,6 +2,7 @@ import { PioD1 } from "../db/pio";
 import { getConfig, getNumberConfig } from "../lib/config";
 import { cleanStr, escapeHtml } from "../lib/html";
 import { md5Hex, postPasswordHash } from "../lib/hash";
+import { decodeImage, encodeJpeg, resizeNearest } from "./thumbnail";
 
 type PostResult = {
   html: string;
@@ -140,11 +141,11 @@ async function validateAndStoreImage(env: Env, file: UploadFile, tim: string, al
   });
   const thumbSize = calculateThumbSize(info.width, info.height, isReply);
   if (thumbSize.width > 0 && thumbSize.height > 0 && info.ext !== ".swf") {
-    // PARITY: PHP writes a `${tim}s.jpg` thumbnail file. Without adding an
-    // image encoder dependency in this locked step, keep the same R2 object
-    // lifecycle and HTML dimensions while reusing the validated source bytes.
-    await env.R2.put(`${tim}s.jpg`, buffer, {
-      httpMetadata: { contentType: file.type || mimeFromExt(info.ext) }
+    const decoded = decodeImage(buffer, info.ext);
+    const resized = resizeNearest(decoded, thumbSize.width, thumbSize.height);
+    const jpegThumb = encodeJpeg(resized, 75);
+    await env.R2.put(`${tim}s.jpg`, jpegThumb, {
+      httpMetadata: { contentType: "image/jpeg" }
     });
   }
   return {

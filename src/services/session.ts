@@ -1,3 +1,5 @@
+import { verifyPhpCrypt } from "../lib/php-crypt";
+
 export const adminSessionPrefix = "session:admin:";
 
 export function getCookie(request: Request, name: string): string | null {
@@ -40,6 +42,9 @@ export async function verifyAdminPassword(input: string, env: Env): Promise<bool
     const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
     const hex = [...new Uint8Array(hash)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
     return `sha256:${hex}` === adminHash;
+  }
+  if (adminHash.startsWith("$") || /^[./0-9A-Za-z]{13}$/.test(adminHash)) {
+    return verifyPhpCrypt(input, adminHash);
   }
   return input === adminHash;
 }

@@ -14,8 +14,16 @@
     "deploy": "wrangler deploy"
   },
   "dependencies": {
+    "apache-md5": "^1.1.8",
+    "bcryptjs": "^3.0.3",
+    "fast-png": "^8.0.0",
     "hono": "^4.6.14",
-    "kysely": "^0.28.17"
+    "jpeg-js": "^0.4.4",
+    "js-sha256": "^0.11.1",
+    "kysely": "^0.28.17",
+    "omggif": "^1.0.10",
+    "sha512-crypt-ts": "^0.1.27",
+    "unix-crypt-td-js": "^1.1.4"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241205.0",
