@@ -2,8 +2,10 @@ import { PioD1 } from "../db/pio";
 import { getConfig, getNumberConfig } from "../lib/config";
 import { cleanStr, escapeHtml } from "../lib/html";
 import { md5Hex, postPasswordHash } from "../lib/hash";
+import { t } from "../lib/i18n";
 import { getCookie } from "./session";
 import { decodeImage, encodeJpeg, resizeNearest } from "./thumbnail";
+import unixCrypt from "unix-crypt-td-js";
 
 type PostResult = {
   html: string;
@@ -80,7 +82,9 @@ export async function handleRegist(request: Request, env: Env): Promise<PostResu
   }
   if (!com && !hasUpload) return error("在沒有附加圖檔的情況下，請寫入內文", 400);
 
-  name = name || defaultName;
+  const identity = await applyNameIdentity(env, name, email);
+  name = identity.name || defaultName;
+  email = identity.email;
   sub = sub || defaultTitle;
   com = normalizeComment(com || defaultComment);
   const category = categoryInput ? `,${categoryInput.split(",").map((part) => part.trim()).join(",")},` : "";
@@ -227,6 +231,47 @@ function normalizeComment(comment: string): string {
     .replace(/\r\n|\r/g, "\n")
     .replace(/\n((　| )*\n){3,}/g, "\n")
     .replaceAll("\n", "<br />");
+}
+
+async function applyNameIdentity(env: Env, rawName: string, rawEmail: string): Promise<{ name: string; email: string; isAdmin: boolean }> {
+  const tripPre = t("trip_pre");
+  const tripPreFake = t("trip_pre_fake");
+  const capCharFake = t("cap_char_fake");
+  const capSuffix = await getConfig(env, "CAP_SUFFIX", " ★");
+  let name = rawName.replaceAll(tripPre, tripPreFake).replaceAll(capSuffix, capCharFake).replace(/\r\n|\r|\n/g, "");
+  let email = rawEmail.replace(/\r\n|\r|\n/g, "");
+  let nameOri = name;
+  let isAdmin = false;
+
+  const tripMatch = /(.*?)[#＃](.*)/u.exec(name);
+  if (tripMatch) {
+    name = nameOri = tripMatch[1];
+    const tripKey = tripMatch[2].replaceAll("&amp;", "&");
+    const salt = (tripKey + "H.")
+      .slice(1, 3)
+      .replace(/[^\.-z]/g, ".")
+      .replace(/[:;<=>?@[\\\]^_`]/g, (char) => "ABCDEFGabcdef"[":;<=>?@[\\]^_`".indexOf(char)] ?? ".");
+    name = `${name}${tripPre}${unixCrypt(tripKey, salt).slice(-10)}`;
+  }
+
+  const capEnabled = await getNumberConfig(env, "CAP_ENABLE", 1);
+  const capMatch = /(.*?)[#＃](.*)/u.exec(email);
+  if (capEnabled && capMatch) {
+    const capName = await getConfig(env, "CAP_NAME", "futaba");
+    const capPass = await getConfig(env, "CAP_PASS", "futaba");
+    const capPassword = capMatch[2].replaceAll("&amp;", "&");
+    if (nameOri === capName && capPassword === capPass) {
+      name = `<span class="admin_cap">${name}${capSuffix}</span>`;
+      email = capMatch[1];
+      isAdmin = true;
+    }
+  }
+
+  if (!isAdmin) {
+    name = name.replaceAll(t("admin"), `"${t("admin")}"`).replaceAll(t("deletor"), `"${t("deletor")}"`);
+  }
+  name = name.replaceAll(`&${tripPre}`, `&amp;${tripPre}`);
+  return { name, email, isAdmin };
 }
 
 async function formatNow(env: Env, seconds: number, remote: string): Promise<string> {
