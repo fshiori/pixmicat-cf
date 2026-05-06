@@ -50,6 +50,22 @@ const zhTw: Record<string, string> = {
   admin_delete: "刪除文章",
   admin_notices: "<ul><li>想刪除文章，請勾選該文章前之「刪除」核取框之後按下執行按鈕</li><li>只想刪除文章的附加圖檔，請先勾選「僅刪除附加圖檔」再按照一般刪文方式</li></ul>",
   admin_list_header: "<th>功能</th><th>停止</th><th>刪除</th><th>投稿日</th><th>標題</th><th>名稱</th><th>內文</th><th>主機位置名稱</th><th>附加圖檔 (Bytes)<br />MD5 檢查碼</th>"
+  ,search_top: "搜尋",
+  search_notice: "<li>請輸入要搜尋的關鍵字，設定好搜尋目標之後，按下「搜尋」按鈕。</li><li>關鍵字使用半形空白可以區隔多個搜尋關鍵字作搜尋。</li><li>如果有多個關鍵字，可以選擇搜尋方法，系統提供 AND(交集) 和 OR(聯集) 方式搜尋。<p />關鍵字：",
+  search_target: "搜尋目標：",
+  search_target_comment: "內文",
+  search_target_name: "名稱",
+  search_target_topic: "標題",
+  search_target_number: "編號",
+  search_method: "搜尋方法：",
+  search_method_and: "AND",
+  search_method_or: "OR",
+  search_submit_btn: " 搜尋 ",
+  search_notfound: "找不到符合的關鍵字。",
+  search_back: "[回上一頁]",
+  category_nokeyword: "請輸入類別標籤以搜尋類似文章。",
+  category_notfound: "沒有符合此類別標籤的文章",
+  category_recache: "重新快取"
 };
 
 export function t(key: string, ...args: Array<string | number>): string {
