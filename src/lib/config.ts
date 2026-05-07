@@ -1,5 +1,5 @@
 export const defaults = {
-  title: "Pixmicat!-PIO",
+  title: "Pixmicat!-CF",
   language: "zh_TW"
 } as const;
 

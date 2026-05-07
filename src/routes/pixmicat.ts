@@ -79,7 +79,7 @@ function parseThreadPage(pageNum: string | undefined): number | "RE_PAGE_MAX" | 
 function unsupportedMode(env: Env, mode: string): Response {
   return htmlResponse(
     renderShell(
-      env.TITLE || "Pixmicat!-PIO",
+      env.TITLE || "Pixmicat!-CF",
       `<div id="error"><div style="text-align: center; font-size: 1.5em; font-weight: bold;">
 <span style="color: red;">不支援的操作模式：${mode}</span>
 </div><hr /></div>`

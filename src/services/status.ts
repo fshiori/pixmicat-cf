@@ -10,7 +10,7 @@ export async function renderStatus(env: Env): Promise<Response> {
 <table class="admTable">
 <thead><tr><td style="text-align:center" colspan="4">${t("info_basic")}</td></tr></thead>
 <tbody>
-<tr><td style="width: 240px;">${t("info_basic_ver")}</td><td colspan="3"> Pixmicat!-PIO 8th.Release.4 CF </td></tr>
+<tr><td style="width: 240px;">${t("info_basic_ver")}</td><td colspan="3"> Pixmicat!-CF 8th.Release.4 </td></tr>
 <tr><td>${t("info_basic_pio")}</td><td colspan="3"> D1 : 0.1 </td></tr>
 <tr style="text-align:center"><td>${t("info_basic_threadcount")}</td><td colspan="3">${threads} ${t("info_basic_threads")}</td></tr>
 <tr style="text-align:center"><td>${t("info_dsusage_count")}</td><td colspan="3">${posts}</td></tr>
@@ -29,7 +29,7 @@ ${t("module_info")}<ul></ul><hr />
 }
 
 function shell(body: string): string {
-  return `<!DOCTYPE html><html lang="zh-TW"><head><meta charset="utf-8"><title>Pixmicat!-PIO</title><link rel="stylesheet" type="text/css" href="mainstyle.css" /></head><body>${body}</body></html>`;
+  return `<!DOCTYPE html><html lang="zh-TW"><head><meta charset="utf-8"><title>Pixmicat!-CF</title><link rel="stylesheet" type="text/css" href="mainstyle.css" /></head><body>${body}</body></html>`;
 }
 
 function html(body: string): Response {
