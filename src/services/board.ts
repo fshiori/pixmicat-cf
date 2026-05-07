@@ -16,7 +16,7 @@ type ThreadOptions = {
 
 export async function renderBoardIndex(env: Env, options: BoardOptions = { page: 0 }): Promise<string> {
   const pio = new PioD1(env.DB);
-  const title = await getConfig(env, "TITLE", env.TITLE || "Pixmicat!-PIO");
+  const title = await getConfig(env, "TITLE", env.TITLE || "Pixmicat!-CF");
   const pageDef = await getNumberConfig(env, "PAGE_DEF", 15);
   const reDef = await getNumberConfig(env, "RE_DEF", 10);
   const threadCount = await pio.threadCount();
@@ -38,7 +38,7 @@ export async function renderBoardIndex(env: Env, options: BoardOptions = { page:
 
 export async function renderThreadView(env: Env, options: ThreadOptions): Promise<string> {
   const pio = new PioD1(env.DB);
-  const title = await getConfig(env, "TITLE", env.TITLE || "Pixmicat!-PIO");
+  const title = await getConfig(env, "TITLE", env.TITLE || "Pixmicat!-CF");
   if (!(await pio.isThread(options.resno))) {
     return renderErrorPage(title, "欲回應之文章並不存在！");
   }

@@ -24,5 +24,5 @@ run_worker_first = true
 [vars]
 TIME_ZONE = "+8"
 PIXMICAT_LANGUAGE = "zh_TW"
-TITLE = "Pixmicat!-PIO"
+TITLE = "Pixmicat!-CF"
 ENVIRONMENT = "local"

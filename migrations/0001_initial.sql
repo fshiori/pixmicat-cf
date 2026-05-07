@@ -62,7 +62,7 @@ CREATE INDEX IF NOT EXISTS idx_moderation_log_target ON moderation_log(target_ty
 CREATE INDEX IF NOT EXISTS idx_moderation_log_created_at ON moderation_log(created_at);
 
 INSERT OR IGNORE INTO configs (key, value, description, updated_at) VALUES
-  ('TITLE', 'Pixmicat!-PIO', 'Page title from config.php TITLE', unixepoch()),
+  ('TITLE', 'Pixmicat!-CF', 'Page title from config.php TITLE', unixepoch()),
   ('HOME', '../', 'Top link home target', unixepoch()),
   ('TIME_ZONE', '+8', 'GMT offset used by Pixmicat date formatting', unixepoch()),
   ('PIXMICAT_LANGUAGE', 'zh_TW', 'Default language', unixepoch()),

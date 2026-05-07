@@ -112,7 +112,7 @@ D1 maintenance action is not supported in this runtime.
 }
 
 function shell(body: string): string {
-  return `<!DOCTYPE html><html lang="zh-TW"><head><meta charset="utf-8"><title>Pixmicat!-PIO</title><link rel="stylesheet" type="text/css" href="mainstyle.css" /></head><body>${body}</body></html>`;
+  return `<!DOCTYPE html><html lang="zh-TW"><head><meta charset="utf-8"><title>Pixmicat!-CF</title><link rel="stylesheet" type="text/css" href="mainstyle.css" /></head><body>${body}</body></html>`;
 }
 
 function html(body: string, headers?: HeadersInit): Response {

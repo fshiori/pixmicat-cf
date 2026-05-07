@@ -62,7 +62,7 @@ function normalizeField(field: string): "com" | "name" | "sub" | "no" {
 }
 
 function shell(body: string): string {
-  return `<!DOCTYPE html><html lang="zh-TW"><head><meta charset="utf-8"><title>Pixmicat!-PIO</title><link rel="stylesheet" type="text/css" href="mainstyle.css" /></head><body>${body}</body></html>`;
+  return `<!DOCTYPE html><html lang="zh-TW"><head><meta charset="utf-8"><title>Pixmicat!-CF</title><link rel="stylesheet" type="text/css" href="mainstyle.css" /></head><body>${body}</body></html>`;
 }
 
 function html(body: string, status = 200): Response {

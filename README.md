@@ -1,6 +1,8 @@
 # Pixmicat! Cloudflare Workers 版
 
-這個專案是 Pixmicat!-PIO 8th.Release.4 的 Cloudflare 原生移植版本。目標 stack：
+Demo site：http://pixmicat.magilab.org/
+
+這個專案是 Pixmicat!-CF，基於 Pixmicat!-PIO 8th.Release.4 的 Cloudflare 原生移植版本。目標 stack：
 
 - Cloudflare Workers + TypeScript + Hono
 - Cloudflare D1 作為 PIO 資料庫
