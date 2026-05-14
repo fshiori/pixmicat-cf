@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Pixmicat! 8th.Release.4 for Cloudflare Workers",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --local --port 8787",
